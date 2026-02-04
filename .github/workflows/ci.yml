@@ -13,9 +13,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/rust
 
     steps:
       - name: Checkout code
@@ -28,15 +25,20 @@ jobs:
 
       - name: Cache cargo registry & build
         uses: Swatinem/rust-cache@v2
+        working-directory: packages/rust
 
       - name: Check formatting
         run: cargo fmt --all -- --check
+        working-directory: packages/rust
 
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+        working-directory: packages/rust
 
       - name: Run tests
         run: cargo test --all-features
+        working-directory: packages/rust
 
       - name: Build check
         run: cargo build --release
+        working-directory: packages/rust

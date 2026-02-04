@@ -1,17 +1,23 @@
-name: CI
+name: CI - Rust
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'packages/rust/**'
+      - '.github/workflows/ci-rust.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'packages/rust/**'
+      - '.github/workflows/ci-rust.yml'
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   test:
-    name: Test
+    name: Rust CI
     runs-on: ubuntu-latest
     defaults:
       run:

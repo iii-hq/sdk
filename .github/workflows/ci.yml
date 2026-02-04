@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: packages/rust
+        working-directory: packages/rust/iii
 
     steps:
       - name: Checkout code

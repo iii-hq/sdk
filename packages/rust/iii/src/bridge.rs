@@ -958,7 +958,9 @@ mod tests {
     #[test]
     fn register_trigger_unregister_removes_entry() {
         let bridge = Bridge::new("ws://localhost:1234");
-        let trigger = bridge.register_trigger("demo", "functions.echo", json!({ "foo": "bar" })).unwrap();
+        let trigger = bridge
+            .register_trigger("demo", "functions.echo", json!({ "foo": "bar" }))
+            .unwrap();
 
         assert_eq!(bridge.inner.triggers.lock().unwrap().len(), 1);
 

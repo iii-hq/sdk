@@ -153,7 +153,7 @@ export class Bridge implements BridgeClient {
 
     return {
       unregister: () => {
-        this.sendMessage(MessageType.UnregisterTrigger, { id, type: MessageType.UnregisterTrigger })
+        this.sendMessage(MessageType.UnregisterTrigger, { id, trigger_type: MessageType.UnregisterTrigger })
         this.triggers.delete(id)
       },
     }

@@ -6,11 +6,15 @@ on:
     paths:
       - 'packages/node/**'
       - '.github/workflows/ci-node.yml'
+      - '.github/actions/**'
+      - '.github/engine-config/**'
   pull_request:
     branches: [main]
     paths:
       - 'packages/node/**'
       - '.github/workflows/ci-node.yml'
+      - '.github/actions/**'
+      - '.github/engine-config/**'
 
 jobs:
   test:
@@ -51,6 +55,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Setup III Engine
+        id: engine
+        uses: ./.github/actions/setup-iii-engine
+        with:
+          engine-repo: ${{ vars.ENGINE_REPO || '' }}
+          engine-version: ${{ vars.ENGINE_VERSION || 'latest' }}
+          github-token: ${{ github.token }}
+
       - name: Lint
         working-directory: .
         run: npx @biomejs/biome check packages/node
@@ -59,7 +71,14 @@ jobs:
         run: pnpm --filter @iii-dev/sdk exec tsc --noEmit
 
       - name: Test
+        env:
+          III_BRIDGE_URL: ws://localhost:49134
+          III_HTTP_URL: http://localhost:3111
         run: pnpm --filter @iii-dev/sdk test
+
+      - name: Stop III Engine
+        if: always() && steps.engine.outputs.engine-available == 'true'
+        uses: ./.github/actions/stop-iii-engine
 
       - name: Build
         run: pnpm build

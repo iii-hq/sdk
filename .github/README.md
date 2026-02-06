@@ -88,6 +88,59 @@ Manual workflows for publishing pre-release versions (alpha, beta, rc):
   - **Inputs:** Target version and reason
   - Deletes problematic release and creates rollback tag
 
+## Composite Actions
+
+Reusable composite actions for setting up the III Engine in CI workflows:
+
+### `setup-iii-engine`
+
+Downloads, caches, and starts the III Engine server for integration tests.
+
+**Inputs:**
+- `engine-repo` (optional): GitHub repository containing III Engine releases (default: `{owner}/iii-engine`)
+- `engine-version` (optional): Engine version to download (default: `latest`)
+- `config-path` (optional): Path to engine config YAML (default: `.github/engine-config/test-config.yml`)
+- `github-token` (required): GitHub token for API access
+
+**Outputs:**
+- `engine-available`: `true` if engine is running, `false` if unavailable (graceful degradation)
+
+**Usage:**
+```yaml
+- name: Setup III Engine
+  id: engine
+  uses: ./.github/actions/setup-iii-engine
+  with:
+    engine-repo: ${{ vars.ENGINE_REPO || '' }}
+    engine-version: ${{ vars.ENGINE_VERSION || 'latest' }}
+    github-token: ${{ github.token }}
+```
+
+The action automatically:
+- Resolves the latest release tag if `engine-version` is `latest`
+- Caches the binary to speed up subsequent runs
+- Downloads the engine binary from GitHub releases
+- Starts the engine server in the background
+- Waits for health check (`http://localhost:3111/health`)
+- Sets environment variables `III_BRIDGE_URL` and `III_HTTP_URL` are expected by tests
+
+If the engine cannot be downloaded or started, the action outputs `engine-available=false` and does not fail the job. Tests should check this output and skip integration tests accordingly.
+
+### `stop-iii-engine`
+
+Stops the III Engine server and cleans up temporary files.
+
+**No inputs required** - reads PID from `/tmp/iii-engine.pid`
+
+**Usage:**
+```yaml
+- name: Stop III Engine
+  if: always() && steps.engine.outputs.engine-available == 'true'
+  uses: ./.github/actions/stop-iii-engine
+```
+
+Always use `if: always()` to ensure cleanup runs even if previous steps fail.
+
 ## Pre-commit Hooks
 
 Pre-commit hooks automatically fix linting and formatting issues before commits, preventing fixable failures in CI.

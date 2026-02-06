@@ -77,11 +77,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Setup III Engine
+        id: engine
+        uses: ./.github/actions/setup-iii-engine
+        with:
+          engine-repo: ${{ vars.ENGINE_REPO || '' }}
+          engine-version: ${{ vars.ENGINE_VERSION || 'latest' }}
+          github-token: ${{ github.token }}
+
       - name: Type check
         run: pnpm --filter @iii-dev/sdk exec tsc --noEmit
 
       - name: Test
+        env:
+          III_BRIDGE_URL: ws://localhost:49134
+          III_HTTP_URL: http://localhost:3111
         run: pnpm --filter @iii-dev/sdk test
+
+      - name: Stop III Engine
+        if: always() && steps.engine.outputs.engine-available == 'true'
+        uses: ./.github/actions/stop-iii-engine
 
       - name: Build
         run: pnpm build
@@ -106,6 +121,14 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev]"
 
+      - name: Setup III Engine
+        id: engine
+        uses: ./.github/actions/setup-iii-engine
+        with:
+          engine-repo: ${{ vars.ENGINE_REPO || '' }}
+          engine-version: ${{ vars.ENGINE_VERSION || 'latest' }}
+          github-token: ${{ github.token }}
+
       - name: Lint
         run: ruff check src
 
@@ -113,7 +136,14 @@ jobs:
         run: mypy src
 
       - name: Test
+        env:
+          III_BRIDGE_URL: ws://localhost:49134
+          III_HTTP_URL: http://localhost:3111
         run: pytest || [ $? -eq 5 ]
+
+      - name: Stop III Engine
+        if: always() && steps.engine.outputs.engine-available == 'true'
+        uses: ./.github/actions/stop-iii-engine
 
   test-rust:
     name: Test Rust SDK
@@ -134,6 +164,14 @@ jobs:
       - name: Cache cargo registry & build
         uses: Swatinem/rust-cache@v2
 
+      - name: Setup III Engine
+        id: engine
+        uses: ./.github/actions/setup-iii-engine
+        with:
+          engine-repo: ${{ vars.ENGINE_REPO || '' }}
+          engine-version: ${{ vars.ENGINE_VERSION || 'latest' }}
+          github-token: ${{ github.token }}
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -141,7 +179,14 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Run tests
+        env:
+          III_BRIDGE_URL: ws://localhost:49134
+          III_HTTP_URL: http://localhost:3111
         run: cargo test --all-features
+
+      - name: Stop III Engine
+        if: always() && steps.engine.outputs.engine-available == 'true'
+        uses: ./.github/actions/stop-iii-engine
 
   create-release:
     name: Create Release

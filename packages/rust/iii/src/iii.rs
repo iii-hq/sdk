@@ -146,21 +146,11 @@ pub struct FunctionsAvailableGuard {
 
 impl Drop for FunctionsAvailableGuard {
     fn drop(&mut self) {
-        let mut callbacks = self
-            .iii
-            .inner
-            .functions_available_callbacks
-            .lock()
-            .unwrap();
+        let mut callbacks = self.iii.inner.functions_available_callbacks.lock().unwrap();
         callbacks.remove(&self.callback_id);
 
         if callbacks.is_empty() {
-            let mut trigger = self
-                .iii
-                .inner
-                .functions_available_trigger
-                .lock()
-                .unwrap();
+            let mut trigger = self.iii.inner.functions_available_trigger.lock().unwrap();
             if let Some(trigger) = trigger.take() {
                 trigger.unregister();
             }

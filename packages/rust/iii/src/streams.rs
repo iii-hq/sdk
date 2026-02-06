@@ -26,8 +26,8 @@
 //! ```
 
 use crate::{
-    iii::III,
     error::IIIError,
+    iii::III,
     types::{StreamUpdateInput, UpdateOp, UpdateResult},
 };
 

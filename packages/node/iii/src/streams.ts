@@ -6,6 +6,7 @@ export interface StreamAuthInput {
 }
 
 export interface StreamAuthResult {
+  // biome-ignore lint/suspicious/noExplicitAny: any is fine here
   context?: any
 }
 
@@ -33,6 +34,7 @@ export type StreamSetInput = {
   stream_name: string
   group_id: string
   item_id: string
+  // biome-ignore lint/suspicious/noExplicitAny: any is fine here
   data: any
 }
 
@@ -64,6 +66,7 @@ export type StreamUpdateResult<TData> = {
 export type UpdateSet = {
   type: 'set'
   path: string
+  // biome-ignore lint/suspicious/noExplicitAny: any is fine here
   value: any
 }
 
@@ -87,7 +90,13 @@ export type UpdateRemove = {
 export type UpdateMerge = {
   type: 'merge'
   path: string
+  // biome-ignore lint/suspicious/noExplicitAny: any is fine here
   value: any
+}
+
+export type DeleteResult = {
+  // biome-ignore lint/suspicious/noExplicitAny: any is fine here
+  old_value?: any
 }
 
 export type UpdateOp = UpdateSet | UpdateIncrement | UpdateDecrement | UpdateRemove | UpdateMerge
@@ -102,7 +111,7 @@ export type StreamUpdateInput = {
 export interface IStream<TData> {
   get(input: StreamGetInput): Promise<TData | null>
   set(input: StreamSetInput): Promise<StreamSetResult<TData> | null>
-  delete(input: StreamDeleteInput): Promise<void>
+  delete(input: StreamDeleteInput): Promise<DeleteResult>
   getGroup(input: StreamGetGroupInput): Promise<TData[]>
   listGroups(input: StreamListGroupsInput): Promise<string[]>
   update(input: StreamUpdateInput): Promise<StreamUpdateResult<TData> | null>

@@ -1,21 +1,21 @@
 import { iii } from './iii'
-import { Todo } from './types'
+import type { Todo } from './types'
 
 export const streams = {
   get: async (stream_name: string, group_id: string, item_id: string): Promise<any | null> => {
-    return iii.invokeFunction('streams.get', { stream_name, group_id, item_id })
+    return iii.call('streams.get', { stream_name, group_id, item_id })
   },
   set: async (stream_name: string, group_id: string, item_id: string, data: any): Promise<any> => {
-    return iii.invokeFunction('streams.set', { stream_name, group_id, item_id, data })
+    return iii.call('streams.set', { stream_name, group_id, item_id, data })
   },
   delete: async (stream_name: string, group_id: string, item_id: string): Promise<void> => {
-    return iii.invokeFunction('streams.delete', { stream_name, group_id, item_id })
+    return iii.call('streams.delete', { stream_name, group_id, item_id })
   },
   getGroup: async (stream_name: string, group_id: string): Promise<any[]> => {
-    return iii.invokeFunction('streams.getGroup', { stream_name, group_id })
+    return iii.call('streams.getGroup', { stream_name, group_id })
   },
   listGroups: async (stream_name: string): Promise<string[]> => {
-    return iii.invokeFunction('streams.listGroups', { stream_name })
+    return iii.call('streams.listGroups', { stream_name })
   },
 }
 
@@ -27,10 +27,9 @@ iii.createStream('todo', {
     const existingTodo = todoState.find(todo => todo.id === input.item_id)
 
     if (existingTodo) {
-      todoState = todoState.map(todo =>
-        todo.id === input.item_id ? { ...todo, ...input.data } : todo,
-      )
-      return { existed: true, data: existingTodo }
+      const newTodo = { ...existingTodo, ...input.data }
+      todoState = todoState.map(todo => (todo.id === input.item_id ? newTodo : todo))
+      return { old_value: existingTodo, new_value: newTodo }
     }
 
     const newTodo = {
@@ -43,11 +42,16 @@ iii.createStream('todo', {
 
     todoState.push(newTodo)
 
-    return { existed: false, data: newTodo }
+    return { old_value: undefined, new_value: newTodo }
   },
   delete: async input => {
+    const old_value = todoState.find(todo => todo.id === input.item_id)
     todoState = todoState.filter(todo => todo.id !== input.item_id)
+    return { old_value }
   },
   getGroup: async input => todoState.filter(todo => todo.groupId === input.group_id),
   listGroups: async () => [...new Set(todoState.map(todo => todo.groupId))],
+  update: async () => {
+    throw new Error('Not implemented')
+  },
 })

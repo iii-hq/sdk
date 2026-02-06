@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { iii } from './utils'
+import { iii, sleep } from './utils'
 import type { StreamSetInput, StreamSetResult } from '../src/streams'
 
 type TestData = {
@@ -15,7 +15,7 @@ describe('Stream Operations', () => {
 
   beforeEach(async () => {
     await iii
-      .invokeFunction('streams.delete', {
+      .call('streams.delete', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
@@ -31,15 +31,12 @@ describe('Stream Operations', () => {
         metadata: { created: new Date().toISOString() },
       }
 
-      const result = await iii.invokeFunction<StreamSetInput, StreamSetResult<TestData>>(
-        'streams.set',
-        {
-          stream_name: testStreamName,
-          group_id: testGroupId,
-          item_id: testItemId,
-          data: testData,
-        },
-      )
+      const result = await iii.call<StreamSetInput, StreamSetResult<TestData>>('streams.set', {
+        stream_name: testStreamName,
+        group_id: testGroupId,
+        item_id: testItemId,
+        data: testData,
+      })
 
       expect(result).toBeDefined()
       expect(result).toEqual({ old_value: null, new_value: testData })
@@ -49,14 +46,14 @@ describe('Stream Operations', () => {
       const initialData: TestData = { value: 1 }
       const updatedData: TestData = { value: 2, updated: true }
 
-      await iii.invokeFunction('streams.set', {
+      await iii.call('streams.set', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
         data: initialData,
       })
 
-      const result: StreamSetResult<any> = await iii.invokeFunction('streams.set', {
+      const result: StreamSetResult<any> = await iii.call('streams.set', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
@@ -72,14 +69,14 @@ describe('Stream Operations', () => {
     it('should get an existing stream item', async () => {
       const testData: TestData = { name: 'Test', value: 100 }
 
-      await iii.invokeFunction('streams.set', {
+      await iii.call('streams.set', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
         data: testData,
       })
 
-      const result: TestData = await iii.invokeFunction('streams.get', {
+      const result: TestData = await iii.call('streams.get', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
@@ -90,7 +87,7 @@ describe('Stream Operations', () => {
     })
 
     it('should return null for non-existent item', async () => {
-      const result = await iii.invokeFunction('streams.get', {
+      const result = await iii.call('streams.get', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: 'non-existent-item',
@@ -102,20 +99,20 @@ describe('Stream Operations', () => {
 
   describe('streams.delete', () => {
     it('should delete an existing stream item', async () => {
-      await iii.invokeFunction('streams.set', {
+      await iii.call('streams.set', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
         data: { test: true },
       })
 
-      await iii.invokeFunction('streams.delete', {
+      await iii.call('streams.delete', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
       })
 
-      const result = await iii.invokeFunction('streams.get', {
+      const result = await iii.call('streams.get', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
@@ -126,7 +123,7 @@ describe('Stream Operations', () => {
 
     it('should handle deleting non-existent item gracefully', async () => {
       await expect(
-        iii.invokeFunction('streams.delete', {
+        iii.call('streams.delete', {
           stream_name: testStreamName,
           group_id: testGroupId,
           item_id: 'non-existent',
@@ -148,7 +145,7 @@ describe('Stream Operations', () => {
 
       // Set multiple items
       for (const item of items) {
-        await iii.invokeFunction('streams.set', {
+        await iii.call('streams.set', {
           stream_name: testStreamName,
           group_id: groupId,
           item_id: item.id,
@@ -156,7 +153,7 @@ describe('Stream Operations', () => {
         })
       }
 
-      const result: TestDataWithId[] = await iii.invokeFunction('streams.list', {
+      const result: TestDataWithId[] = await iii.call('streams.list', {
         stream_name: testStreamName,
         group_id: groupId,
       })
@@ -165,6 +162,54 @@ describe('Stream Operations', () => {
       expect(Array.isArray(result)).toBe(true)
       expect(result.length).toBeGreaterThanOrEqual(items.length)
       expect(result.sort(sort)).toEqual(items.sort(sort))
+    })
+  })
+
+  describe('streams custom operations', () => {
+    it('should perform a custom operation on a stream item', async () => {
+      const testStreamName = `test-stream-${Date.now()}`
+      const state: Map<string, TestData> = new Map()
+
+      iii.createStream(testStreamName, {
+        get: async input => state.get(`${input.group_id}::${input.item_id}`),
+        set: async input => {
+          const key = `${input.group_id}::${input.item_id}`
+          const oldValue = state.get(key)
+          state.set(key, input.data)
+
+          return { old_value: oldValue, new_value: input.data }
+        },
+        delete: async input => {
+          const oldValue = state.get(`${input.group_id}::${input.item_id}`)
+          state.delete(`${input.group_id}::${input.item_id}`)
+          return { old_value: oldValue }
+        },
+        getGroup: async input =>
+          Array.from(state.keys())
+            .filter(key => key.startsWith(`${input.group_id}::`))
+            .map(key => state.get(key)),
+        listGroups: async () => Array.from(state.keys()),
+        update: async () => {
+          throw new Error('Not implemented')
+        },
+      })
+
+      await sleep(1_000)
+
+      const testData: TestData = { name: 'Test', value: 100 }
+      const getArgs = {
+        stream_name: testStreamName,
+        group_id: testGroupId,
+        item_id: testItemId,
+      }
+
+      await iii.call('streams.set', { ...getArgs, data: testData })
+
+      expect(state.get(`${testGroupId}::${testItemId}`)).toEqual(testData)
+
+      await expect(iii.call('streams.get', getArgs)).resolves.toEqual(testData)
+      await iii.call('streams.delete', getArgs)
+      await expect(iii.call('streams.get', getArgs)).resolves.toEqual(undefined)
     })
   })
 })

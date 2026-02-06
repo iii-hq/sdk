@@ -218,7 +218,7 @@ class Sdk implements ISdk {
     this.services.set(message.id, { ...message, type: MessageType.RegisterService })
   }
 
-  invokeFunction = async <TInput, TOutput>(
+  call = async <TInput, TOutput>(
     function_id: string,
     data: TInput,
     timeoutMs?: number,
@@ -260,7 +260,7 @@ class Sdk implements ISdk {
     })
   }
 
-  invokeFunctionAsync = <TInput>(function_id: string, data: TInput): void => {
+  callVoid = <TInput>(function_id: string, data: TInput): void => {
     // Inject trace context and baggage if available
     const traceparent = injectTraceparent()
     const baggage = injectBaggage()
@@ -268,7 +268,7 @@ class Sdk implements ISdk {
   }
 
   listFunctions = async (): Promise<FunctionInfo[]> => {
-    const result = await this.invokeFunction<Record<string, never>, { functions: FunctionInfo[] }>(
+    const result = await this.call<Record<string, never>, { functions: FunctionInfo[] }>(
       EngineFunctions.LIST_FUNCTIONS,
       {},
     )
@@ -276,7 +276,7 @@ class Sdk implements ISdk {
   }
 
   listWorkers = async (): Promise<WorkerInfo[]> => {
-    const result = await this.invokeFunction<Record<string, never>, { workers: WorkerInfo[] }>(
+    const result = await this.call<Record<string, never>, { workers: WorkerInfo[] }>(
       EngineFunctions.LIST_WORKERS,
       {},
     )
@@ -284,7 +284,7 @@ class Sdk implements ISdk {
   }
 
   private registerWorkerMetadata(): void {
-    this.invokeFunctionAsync(EngineFunctions.REGISTER_WORKER, {
+    this.callVoid(EngineFunctions.REGISTER_WORKER, {
       runtime: 'node',
       version: SDK_VERSION,
       name: this.workerName,

@@ -104,14 +104,14 @@ export interface ISdk {
    * @param data - The data to pass to the function
    * @returns The result of the function
    */
-  invokeFunction<TInput, TOutput>(function_id: string, data: TInput): Promise<TOutput>
+  call<TInput, TOutput>(function_id: string, data: TInput): Promise<TOutput>
 
   /**
    * Invokes a function asynchronously.
    * @param function_id - The path to the function
    * @param data - The data to pass to the function
    */
-  invokeFunctionAsync<TInput>(function_id: string, data: TInput): void
+  callVoid<TInput>(function_id: string, data: TInput): void
 
   /**
    * Registers a new trigger type. A trigger type is a way to invoke a function when a certain event occurs.

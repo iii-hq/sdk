@@ -14,10 +14,7 @@ describe('State Operations', () => {
 
   beforeEach(async () => {
     await iii
-      .invokeFunction('state.delete', {
-        group_id: testGroupId,
-        item_id: testItemId,
-      })
+      .call('state.delete', { group_id: testGroupId, item_id: testItemId })
       .catch(() => void 0)
   })
 
@@ -29,7 +26,7 @@ describe('State Operations', () => {
         metadata: { created: new Date().toISOString() },
       }
 
-      const result = await iii.invokeFunction('state.set', {
+      const result = await iii.call('state.set', {
         group_id: testGroupId,
         item_id: testItemId,
         data: testData,
@@ -43,13 +40,13 @@ describe('State Operations', () => {
       const initialData: TestData = { value: 1 }
       const updatedData: TestData = { value: 2, updated: true }
 
-      await iii.invokeFunction('state.set', {
+      await iii.call('state.set', {
         group_id: testGroupId,
         item_id: testItemId,
         data: initialData,
       })
 
-      const result: StateSetResult = await iii.invokeFunction('state.set', {
+      const result: StateSetResult = await iii.call('state.set', {
         group_id: testGroupId,
         item_id: testItemId,
         data: updatedData,
@@ -64,13 +61,13 @@ describe('State Operations', () => {
     it('should get an existing state item', async () => {
       const testData: TestData = { name: 'Test', value: 100 }
 
-      await iii.invokeFunction('state.set', {
+      await iii.call('state.set', {
         group_id: testGroupId,
         item_id: testItemId,
         data: testData,
       })
 
-      const result: TestData = await iii.invokeFunction('state.get', {
+      const result: TestData = await iii.call('state.get', {
         group_id: testGroupId,
         item_id: testItemId,
       })
@@ -80,7 +77,7 @@ describe('State Operations', () => {
     })
 
     it('should return null for non-existent item', async () => {
-      const result = await iii.invokeFunction('state.get', {
+      const result = await iii.call('state.get', {
         group_id: testGroupId,
         item_id: 'non-existent-item',
       })
@@ -91,18 +88,18 @@ describe('State Operations', () => {
 
   describe('state.delete', () => {
     it('should delete an existing state item', async () => {
-      await iii.invokeFunction('state.set', {
+      await iii.call('state.set', {
         group_id: testGroupId,
         item_id: testItemId,
         data: { test: true },
       })
 
-      await iii.invokeFunction('state.delete', {
+      await iii.call('state.delete', {
         group_id: testGroupId,
         item_id: testItemId,
       })
 
-      const result = await iii.invokeFunction('state.get', {
+      const result = await iii.call('state.get', {
         group_id: testGroupId,
         item_id: testItemId,
       })
@@ -112,7 +109,7 @@ describe('State Operations', () => {
 
     it('should handle deleting non-existent item gracefully', async () => {
       await expect(
-        iii.invokeFunction('state.delete', {
+        iii.call('state.delete', {
           group_id: testGroupId,
           item_id: 'non-existent',
         }),
@@ -133,14 +130,14 @@ describe('State Operations', () => {
 
       // Set multiple items
       for (const item of items) {
-        await iii.invokeFunction('state.set', {
+        await iii.call('state.set', {
           group_id: groupId,
           item_id: item.id,
           data: item,
         })
       }
 
-      const result: TestDataWithId[] = await iii.invokeFunction('state.list', { group_id: groupId })
+      const result: TestDataWithId[] = await iii.call('state.list', { group_id: groupId })
       const sort = (a: TestDataWithId, b: TestDataWithId) => a.id.localeCompare(b.id)
 
       expect(Array.isArray(result)).toBe(true)

@@ -40,7 +40,7 @@ async function testWorkerMetrics() {
 
   try {
     // Query all workers
-    const result = await iii.invokeFunction('engine.workers.list', {})
+    const result = await iii.call('engine.workers.list', {})
 
     if (result && result.workers) {
       console.log(`\nFound ${result.workers.length} worker(s):\n`)

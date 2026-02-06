@@ -1,5 +1,5 @@
 import { SeverityNumber } from '@opentelemetry/api-logs'
-import { getLogger as getOtelLogger } from './telemetry'
+import { getLogger as getOtelLogger } from './telemetry-system'
 import { safeStringify } from './utils'
 
 export type LoggerParams = {

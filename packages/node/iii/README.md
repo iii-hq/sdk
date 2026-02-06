@@ -85,7 +85,7 @@ III Allows you to invoke functions, they can be functions from the Core Modules 
 functions registered by workers.
 
 ```javascript
-const result = await iii.invokeFunction('myFunction', { param1: 'value1' })
+const result = await iii.call('myFunction', { param1: 'value1' })
 console.log(result)
 ```
 
@@ -94,7 +94,7 @@ console.log(result)
 III Allows you to invoke functions asynchronously, they can be functions from the Core Modules or functions registered by workers.
 
 ```javascript
-iii.invokeFunctionAsync('myFunction', { param1: 'value1' })
+iii.callVoid('myFunction', { param1: 'value1' })
 ```
 
 This means the Engine won't hold the execution of the function, it will return immediately. Which means the function will be executed in the background.

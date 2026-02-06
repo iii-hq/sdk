@@ -44,7 +44,7 @@ export type StreamDeleteInput = {
   item_id: string
 }
 
-export type StreamGetGroupInput = {
+export type StreamListInput = {
   stream_name: string
   group_id: string
 }
@@ -112,7 +112,7 @@ export interface IStream<TData> {
   get(input: StreamGetInput): Promise<TData | null>
   set(input: StreamSetInput): Promise<StreamSetResult<TData> | null>
   delete(input: StreamDeleteInput): Promise<DeleteResult>
-  getGroup(input: StreamGetGroupInput): Promise<TData[]>
+  list(input: StreamListInput): Promise<TData[]>
   listGroups(input: StreamListGroupsInput): Promise<string[]>
   update(input: StreamUpdateInput): Promise<StreamUpdateResult<TData> | null>
 }

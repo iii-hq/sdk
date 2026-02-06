@@ -22,7 +22,11 @@ import {
 } from '@opentelemetry/api'
 import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics'
-import { CompositePropagator, W3CBaggagePropagator, W3CTraceContextPropagator } from '@opentelemetry/core'
+import {
+  CompositePropagator,
+  W3CBaggagePropagator,
+  W3CTraceContextPropagator,
+} from '@opentelemetry/core'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
 import { registerInstrumentations } from '@opentelemetry/instrumentation'
 import { LoggerProvider, SimpleLogRecordProcessor } from '@opentelemetry/sdk-logs'
@@ -50,14 +54,15 @@ let loggerProvider: LoggerProvider | null = null
 let tracer: Tracer | null = null
 let meter: Meter | null = null
 let logger: Logger | null = null
-let serviceName: string = 'iii-node-bridge'
+let serviceName: string = 'iii-node-iii'
 
 /**
  * Initialize OpenTelemetry with the given configuration.
  * This should be called once at application startup.
  */
 export function initOtel(config: OtelConfig = {}): void {
-  const enabled = config.enabled ?? (process.env.OTEL_ENABLED === 'true' || process.env.OTEL_ENABLED === '1')
+  const enabled =
+    config.enabled ?? (process.env.OTEL_ENABLED === 'true' || process.env.OTEL_ENABLED === '1')
 
   if (!enabled) {
     console.log('[OTel] OpenTelemetry is disabled')
@@ -70,10 +75,11 @@ export function initOtel(config: OtelConfig = {}): void {
   }
 
   // Configure service identity
-  serviceName = config.serviceName ?? process.env.OTEL_SERVICE_NAME ?? 'iii-node-bridge'
+  serviceName = config.serviceName ?? process.env.OTEL_SERVICE_NAME ?? 'iii-node-iii'
   const serviceVersion = config.serviceVersion ?? process.env.SERVICE_VERSION ?? 'unknown'
   const serviceNamespace = config.serviceNamespace ?? process.env.SERVICE_NAMESPACE
-  const serviceInstanceId = config.serviceInstanceId ?? process.env.SERVICE_INSTANCE_ID ?? randomUUID()
+  const serviceInstanceId =
+    config.serviceInstanceId ?? process.env.SERVICE_INSTANCE_ID ?? randomUUID()
   const engineWsUrl = config.engineWsUrl ?? process.env.III_BRIDGE_URL ?? 'ws://localhost:49134'
 
   // Build resource attributes
@@ -101,7 +107,7 @@ export function initOtel(config: OtelConfig = {}): void {
   propagation.setGlobalPropagator(
     new CompositePropagator({
       propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()],
-    })
+    }),
   )
 
   tracerProvider.register()
@@ -110,7 +116,9 @@ export function initOtel(config: OtelConfig = {}): void {
   console.log(`[OTel] Traces initialized: engine=${engineWsUrl}, service=${serviceName}`)
 
   // Initialize metrics if enabled
-  const metricsEnabled = config.metricsEnabled ?? (process.env.OTEL_METRICS_ENABLED === 'true' || process.env.OTEL_METRICS_ENABLED === '1')
+  const metricsEnabled =
+    config.metricsEnabled ??
+    (process.env.OTEL_METRICS_ENABLED === 'true' || process.env.OTEL_METRICS_ENABLED === '1')
 
   if (metricsEnabled) {
     const metricsExporter = new EngineMetricsExporter(sharedConnection)
@@ -197,7 +205,7 @@ export function getLogger(): Logger | null {
 export async function withSpan<T>(
   name: string,
   options: { kind?: SpanKind; traceparent?: string },
-  fn: (span: Span) => Promise<T>
+  fn: (span: Span) => Promise<T>,
 ): Promise<T> {
   if (!tracer) {
     // Execute without span context when tracer is not initialized
@@ -218,13 +226,15 @@ export async function withSpan<T>(
     return fn(noopSpan)
   }
 
-  const parentContext = options.traceparent ? extractTraceparent(options.traceparent) : context.active()
+  const parentContext = options.traceparent
+    ? extractTraceparent(options.traceparent)
+    : context.active()
 
   return tracer.startActiveSpan(
     name,
     { kind: options.kind ?? SpanKind.INTERNAL },
     parentContext,
-    async (span) => {
+    async span => {
       try {
         const result = await fn(span)
         span.setStatus({ code: SpanStatusCode.OK })
@@ -236,9 +246,18 @@ export async function withSpan<T>(
       } finally {
         span.end()
       }
-    }
+    },
   )
 }
 
 // Re-export OTEL types for convenience
-export { SpanKind, SpanStatusCode, SeverityNumber, type Span, type Context, type Tracer, type Meter, type Logger }
+export {
+  SpanKind,
+  SpanStatusCode,
+  SeverityNumber,
+  type Span,
+  type Context,
+  type Tracer,
+  type Meter,
+  type Logger,
+}

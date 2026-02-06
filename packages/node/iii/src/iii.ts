@@ -3,15 +3,15 @@ import { createRequire } from 'module'
 import * as os from 'os'
 import { type Data, WebSocket } from 'ws'
 import {
-  type BridgeConnectionState,
-  type BridgeReconnectionConfig,
+  type IIIConnectionState,
+  type IIIReconnectionConfig,
   DEFAULT_BRIDGE_RECONNECTION_CONFIG,
   DEFAULT_INVOCATION_TIMEOUT_MS,
   EngineFunctions,
   EngineTriggers,
-} from './bridge-constants'
+} from './iii-constants'
 import {
-  type BridgeMessage,
+  type IIIMessage,
   type FunctionInfo,
   type InvocationResultMessage,
   type InvokeFunctionMessage,
@@ -22,7 +22,7 @@ import {
   type RegisterTriggerTypeMessage,
   type WorkerInfo,
   type WorkerRegisteredMessage,
-} from './bridge-types'
+} from './iii-types'
 import { withContext } from './context'
 import { Logger } from './logger'
 import type { IStream } from './streams'
@@ -45,7 +45,7 @@ import {
 import { registerWorkerGauges, stopWorkerGauges } from './otel-worker-gauges'
 import type { TriggerHandler } from './triggers'
 import type {
-  BridgeClient,
+  ISdk,
   FunctionsAvailableCallback,
   Invocation,
   LogCallback,
@@ -56,6 +56,7 @@ import type {
   RemoteFunctionHandler,
   RemoteTriggerTypeData,
   Trigger,
+  FunctionRef,
 } from './types'
 
 const require = createRequire(import.meta.url)
@@ -70,21 +71,21 @@ function getDefaultWorkerName(): string {
 }
 
 /** Callback type for connection state changes */
-export type ConnectionStateCallback = (state: BridgeConnectionState) => void
+export type ConnectionStateCallback = (state: IIIConnectionState) => void
 
-export type BridgeOptions = {
+export type InitOptions = {
   workerName?: string
   enableMetricsReporting?: boolean
   /** Default timeout for function invocations in milliseconds */
   invocationTimeoutMs?: number
   /** Configuration for WebSocket reconnection behavior */
-  reconnectionConfig?: Partial<BridgeReconnectionConfig>
+  reconnectionConfig?: Partial<IIIReconnectionConfig>
   /** OpenTelemetry configuration. If provided, OTEL will be initialized automatically.
-   * The engineWsUrl is set automatically from the Bridge address. */
+   * The engineWsUrl is set automatically from the III address. */
   otel?: Omit<OtelConfig, 'engineWsUrl'>
 }
 
-export class Bridge implements BridgeClient {
+class Sdk implements ISdk {
   private ws?: WebSocket
   private functions = new Map<string, RemoteFunctionData>()
   private services = new Map<string, Omit<RegisterServiceMessage, 'functions'>>()
@@ -97,26 +98,29 @@ export class Bridge implements BridgeClient {
   private logCallbacks = new Map<LogCallback, LogConfig>()
   private logTrigger?: Trigger
   private logFunctionPath?: string
-  private messagesToSend: BridgeMessage[] = []
+  private messagesToSend: IIIMessage[] = []
   private workerName: string
   private workerId?: string
   private reconnectTimeout?: NodeJS.Timeout
   private metricsReportingEnabled: boolean
   private invocationTimeoutMs: number
-  private reconnectionConfig: BridgeReconnectionConfig
+  private reconnectionConfig: IIIReconnectionConfig
   private reconnectAttempt = 0
-  private connectionState: BridgeConnectionState = 'disconnected'
+  private connectionState: IIIConnectionState = 'disconnected'
   private stateCallbacks = new Set<ConnectionStateCallback>()
   private isShuttingDown = false
 
   constructor(
     private readonly address: string,
-    options?: BridgeOptions,
+    options?: InitOptions,
   ) {
     this.workerName = options?.workerName ?? getDefaultWorkerName()
     this.metricsReportingEnabled = options?.enableMetricsReporting ?? true
     this.invocationTimeoutMs = options?.invocationTimeoutMs ?? DEFAULT_INVOCATION_TIMEOUT_MS
-    this.reconnectionConfig = { ...DEFAULT_BRIDGE_RECONNECTION_CONFIG, ...options?.reconnectionConfig }
+    this.reconnectionConfig = {
+      ...DEFAULT_BRIDGE_RECONNECTION_CONFIG,
+      ...options?.reconnectionConfig,
+    }
 
     // Initialize OpenTelemetry if config is provided
     if (options?.otel) {
@@ -126,10 +130,10 @@ export class Bridge implements BridgeClient {
     this.connect()
   }
 
-  registerTriggerType<TConfig>(
+  registerTriggerType = <TConfig>(
     triggerType: Omit<RegisterTriggerTypeMessage, 'type'>,
     handler: TriggerHandler<TConfig>,
-  ): void {
+  ): void => {
     this.sendMessage(MessageType.RegisterTriggerType, triggerType, true)
     this.triggerTypes.set(triggerType.id, {
       message: { ...triggerType, type: MessageType.RegisterTriggerType },
@@ -137,70 +141,88 @@ export class Bridge implements BridgeClient {
     })
   }
 
-  on(event: string, callback: (arg?: unknown) => void): void {
+  on = (event: string, callback: (arg?: unknown) => void): void => {
     this.ws?.on(event, callback)
   }
 
-  unregisterTriggerType(triggerType: Omit<RegisterTriggerTypeMessage, 'type'>): void {
+  unregisterTriggerType = (triggerType: Omit<RegisterTriggerTypeMessage, 'type'>): void => {
     this.sendMessage(MessageType.UnregisterTriggerType, triggerType, true)
     this.triggerTypes.delete(triggerType.id)
   }
 
-  registerTrigger(trigger: Omit<RegisterTriggerMessage, 'type' | 'id'>): Trigger {
+  registerTrigger = (trigger: Omit<RegisterTriggerMessage, 'type' | 'id'>): Trigger => {
     const id = crypto.randomUUID()
     this.sendMessage(MessageType.RegisterTrigger, { ...trigger, id }, true)
     this.triggers.set(id, { ...trigger, id, type: MessageType.RegisterTrigger })
 
     return {
       unregister: () => {
-        this.sendMessage(MessageType.UnregisterTrigger, { id, trigger_type: MessageType.UnregisterTrigger })
+        this.sendMessage(MessageType.UnregisterTrigger, {
+          id,
+          trigger_type: MessageType.UnregisterTrigger,
+        })
         this.triggers.delete(id)
       },
     }
   }
 
-  registerFunction(message: Omit<RegisterFunctionMessage, 'type'>, handler: RemoteFunctionHandler): void {
-    if (!message.function_path || message.function_path.trim() === '') {
-      throw new Error('function_path is required')
+  registerFunction = (
+    message: Omit<RegisterFunctionMessage, 'type'>,
+    handler: RemoteFunctionHandler,
+  ): FunctionRef => {
+    if (!message.id || message.id.trim() === '') {
+      throw new Error('id is required')
     }
 
     this.sendMessage(MessageType.RegisterFunction, message, true)
-    this.functions.set(message.function_path, {
+    this.functions.set(message.id, {
       message: { ...message, type: MessageType.RegisterFunction },
       handler: async (input, traceparent?: string, baggage?: string) => {
         // If we have a tracer, wrap in a span and pass it to the context
         if (getTracer()) {
           // Extract both traceparent and baggage into a parent context
           const parentContext = extractContext(traceparent, baggage)
-          
+
           return context.with(parentContext, () =>
-            withSpan(`invoke ${message.function_path}`, { kind: SpanKind.SERVER }, async (span) => {
+            withSpan(`invoke ${message.id}`, { kind: SpanKind.SERVER }, async span => {
               const traceId = currentTraceId() ?? crypto.randomUUID()
               const spanId = currentSpanId()
-              const logger = new Logger(undefined, traceId, message.function_path, spanId)
+              const logger = new Logger(undefined, traceId, message.id, spanId)
               const ctx = { logger, trace: span }
 
               return withContext(async () => await handler(input), ctx)
-            })
+            }),
           )
         }
 
         // Fallback without tracing
         const traceId = crypto.randomUUID()
-        const logger = new Logger(undefined, traceId, message.function_path)
+        const logger = new Logger(undefined, traceId, message.id)
         const ctx = { logger }
 
         return withContext(async () => await handler(input), ctx)
       },
     })
+
+    return {
+      id: message.id,
+      unregister: () => {
+        this.sendMessage(MessageType.UnregisterFunction, { id: message.id }, true)
+        this.functions.delete(message.id)
+      },
+    }
   }
 
-  registerService(message: Omit<RegisterServiceMessage, 'type'>): void {
+  registerService = (message: Omit<RegisterServiceMessage, 'type'>): void => {
     this.sendMessage(MessageType.RegisterService, message, true)
     this.services.set(message.id, { ...message, type: MessageType.RegisterService })
   }
 
-  async invokeFunction<TInput, TOutput>(function_path: string, data: TInput, timeoutMs?: number): Promise<TOutput> {
+  invokeFunction = async <TInput, TOutput>(
+    function_id: string,
+    data: TInput,
+    timeoutMs?: number,
+  ): Promise<TOutput> => {
     const invocation_id = crypto.randomUUID()
     // Inject trace context and baggage if available
     const traceparent = injectTraceparent()
@@ -212,7 +234,7 @@ export class Bridge implements BridgeClient {
         const invocation = this.invocations.get(invocation_id)
         if (invocation) {
           this.invocations.delete(invocation_id)
-          reject(new Error(`Invocation timeout after ${effectiveTimeout}ms: ${function_path}`))
+          reject(new Error(`Invocation timeout after ${effectiveTimeout}ms: ${function_id}`))
         }
       }, effectiveTimeout)
 
@@ -228,18 +250,24 @@ export class Bridge implements BridgeClient {
         timeout,
       })
 
-      this.sendMessage(MessageType.InvokeFunction, { invocation_id, function_path, data, traceparent, baggage })
+      this.sendMessage(MessageType.InvokeFunction, {
+        invocation_id,
+        function_id,
+        data,
+        traceparent,
+        baggage,
+      })
     })
   }
 
-  invokeFunctionAsync<TInput>(function_path: string, data: TInput): void {
+  invokeFunctionAsync = <TInput>(function_id: string, data: TInput): void => {
     // Inject trace context and baggage if available
     const traceparent = injectTraceparent()
     const baggage = injectBaggage()
-    this.sendMessage(MessageType.InvokeFunction, { function_path, data, traceparent, baggage })
+    this.sendMessage(MessageType.InvokeFunction, { function_id, data, traceparent, baggage })
   }
 
-  async listFunctions(): Promise<FunctionInfo[]> {
+  listFunctions = async (): Promise<FunctionInfo[]> => {
     const result = await this.invokeFunction<Record<string, never>, { functions: FunctionInfo[] }>(
       EngineFunctions.LIST_FUNCTIONS,
       {},
@@ -247,7 +275,7 @@ export class Bridge implements BridgeClient {
     return result.functions
   }
 
-  async listWorkers(): Promise<WorkerInfo[]> {
+  listWorkers = async (): Promise<WorkerInfo[]> => {
     const result = await this.invokeFunction<Record<string, never>, { workers: WorkerInfo[] }>(
       EngineFunctions.LIST_WORKERS,
       {},
@@ -264,15 +292,18 @@ export class Bridge implements BridgeClient {
     })
   }
 
-  createStream<TData>(streamName: string, stream: IStream<TData>): void {
-    this.registerFunction({ function_path: `streams.get(${streamName})` }, stream.get.bind(stream))
-    this.registerFunction({ function_path: `streams.set(${streamName})` }, stream.set.bind(stream))
-    this.registerFunction({ function_path: `streams.delete(${streamName})` }, stream.delete.bind(stream))
-    this.registerFunction({ function_path: `streams.getGroup(${streamName})` }, stream.getGroup.bind(stream))
-    this.registerFunction({ function_path: `streams.listGroups(${streamName})` }, stream.listGroups.bind(stream))
+  createStream = <TData>(streamName: string, stream: IStream<TData>): void => {
+    this.registerFunction({ id: `streams.get(${streamName})` }, stream.get.bind(stream))
+    this.registerFunction({ id: `streams.set(${streamName})` }, stream.set.bind(stream))
+    this.registerFunction({ id: `streams.delete(${streamName})` }, stream.delete.bind(stream))
+    this.registerFunction({ id: `streams.getGroup(${streamName})` }, stream.getGroup.bind(stream))
+    this.registerFunction(
+      { id: `streams.listGroups(${streamName})` },
+      stream.listGroups.bind(stream),
+    )
   }
 
-  onFunctionsAvailable(callback: FunctionsAvailableCallback): () => void {
+  onFunctionsAvailable = (callback: FunctionsAvailableCallback): (() => void) => {
     this.functionsAvailableCallbacks.add(callback)
 
     if (!this.functionsAvailableTrigger) {
@@ -280,19 +311,22 @@ export class Bridge implements BridgeClient {
         this.functionsAvailableFunctionPath = `engine.on_functions_available.${crypto.randomUUID()}`
       }
 
-      const function_path = this.functionsAvailableFunctionPath
-      if (!this.functions.has(function_path)) {
-        this.registerFunction({ function_path }, async ({functions}: { functions: FunctionInfo[] }) => {
-          this.functionsAvailableCallbacks.forEach((handler) => {
-            handler(functions)
-          })
-          return null
-        })
+      const function_id = this.functionsAvailableFunctionPath
+      if (!this.functions.has(function_id)) {
+        this.registerFunction(
+          { id: function_id },
+          async ({ functions }: { functions: FunctionInfo[] }) => {
+            this.functionsAvailableCallbacks.forEach(handler => {
+              handler(functions)
+            })
+            return null
+          },
+        )
       }
 
       this.functionsAvailableTrigger = this.registerTrigger({
         trigger_type: EngineTriggers.FUNCTIONS_AVAILABLE,
-        function_path,
+        function_id,
         config: {},
       })
     }
@@ -306,7 +340,7 @@ export class Bridge implements BridgeClient {
     }
   }
 
-  onLog(callback: LogCallback, config?: LogConfig): () => void {
+  onLog = (callback: LogCallback, config?: LogConfig): (() => void) => {
     const effectiveConfig = config ?? { level: 'all' }
     this.logCallbacks.set(callback, effectiveConfig)
 
@@ -315,9 +349,9 @@ export class Bridge implements BridgeClient {
         this.logFunctionPath = `engine.on_log.${crypto.randomUUID()}`
       }
 
-      const function_path = this.logFunctionPath
-      if (!this.functions.has(function_path)) {
-        this.registerFunction({ function_path }, async (log: OtelLogEvent) => {
+      const function_id = this.logFunctionPath
+      if (!this.functions.has(function_id)) {
+        this.registerFunction({ id: function_id }, async (log: OtelLogEvent) => {
           this.logCallbacks.forEach((cfg, handler) => {
             try {
               const minSeverity = this.severityTextToNumber(cfg.level ?? 'all')
@@ -334,7 +368,7 @@ export class Bridge implements BridgeClient {
 
       this.logTrigger = this.registerTrigger({
         trigger_type: EngineTriggers.LOG,
-        function_path,
+        function_id,
         config: { level: 'all', severity_min: 0 },
       })
     }
@@ -351,7 +385,7 @@ export class Bridge implements BridgeClient {
   /**
    * Get the current connection state.
    */
-  getConnectionState(): BridgeConnectionState {
+  getConnectionState = (): IIIConnectionState => {
     return this.connectionState
   }
 
@@ -359,7 +393,7 @@ export class Bridge implements BridgeClient {
    * Register a callback to be notified of connection state changes.
    * @returns A function to unregister the callback
    */
-  onConnectionStateChange(callback: ConnectionStateCallback): () => void {
+  onConnectionStateChange = (callback: ConnectionStateCallback): (() => void) => {
     this.stateCallbacks.add(callback)
     // Immediately notify of current state
     callback(this.connectionState)
@@ -367,44 +401,44 @@ export class Bridge implements BridgeClient {
   }
 
   /**
-   * Gracefully shutdown the bridge, cleaning up all resources.
+   * Gracefully shutdown the iii, cleaning up all resources.
    */
-  async shutdown(): Promise<void> {
+  shutdown = async (): Promise<void> => {
     this.isShuttingDown = true
-    
+
     this.stopMetricsReporting()
 
     // Shutdown OpenTelemetry
     await shutdownOtel()
-    
+
     // Clear reconnection timeout
     this.clearReconnectTimeout()
-    
+
     // Reject all pending invocations
     for (const [_id, invocation] of this.invocations) {
       if (invocation.timeout) {
         clearTimeout(invocation.timeout)
       }
-      invocation.reject(new Error('Bridge shutting down'))
+      invocation.reject(new Error('iii is shutting down'))
     }
     this.invocations.clear()
-    
+
     // Close WebSocket
     if (this.ws) {
       this.ws.removeAllListeners()
       this.ws.close()
       this.ws = undefined
     }
-    
+
     // Clear callbacks
     this.stateCallbacks.clear()
-    
+
     this.setConnectionState('disconnected')
   }
 
   // private methods
 
-  private setConnectionState(state: BridgeConnectionState): void {
+  private setConnectionState(state: IIIConnectionState): void {
     if (this.connectionState !== state) {
       this.connectionState = state
       for (const callback of this.stateCallbacks) {
@@ -421,7 +455,7 @@ export class Bridge implements BridgeClient {
     if (this.isShuttingDown) {
       return
     }
-    
+
     this.setConnectionState('connecting')
     this.ws = new WebSocket(this.address)
     this.ws.on('open', this.onSocketOpen.bind(this))
@@ -440,27 +474,28 @@ export class Bridge implements BridgeClient {
     if (this.isShuttingDown) {
       return
     }
-    
-    const { maxRetries, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor } = this.reconnectionConfig
-    
+
+    const { maxRetries, initialDelayMs, backoffMultiplier, maxDelayMs, jitterFactor } =
+      this.reconnectionConfig
+
     if (maxRetries !== -1 && this.reconnectAttempt >= maxRetries) {
       this.setConnectionState('failed')
       this.logError(`Max reconnection retries (${maxRetries}) reached, giving up`)
       return
     }
-    
+
     if (this.reconnectTimeout) {
       return // Already scheduled
     }
-    
+
     const exponentialDelay = initialDelayMs * Math.pow(backoffMultiplier, this.reconnectAttempt)
     const cappedDelay = Math.min(exponentialDelay, maxDelayMs)
     const jitter = cappedDelay * jitterFactor * (2 * Math.random() - 1)
     const delay = Math.floor(cappedDelay + jitter)
-    
+
     this.setConnectionState('reconnecting')
-    console.debug(`[Bridge] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempt + 1})...`)
-    
+    console.debug(`[iii] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempt + 1})...`)
+
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = undefined
       this.reconnectAttempt++
@@ -479,7 +514,9 @@ export class Bridge implements BridgeClient {
 
     const meter = getMeter()
     if (!meter) {
-      console.warn('[Bridge] Worker metrics disabled: OpenTelemetry not initialized. Call initOtel() with metricsEnabled: true before creating the Bridge.')
+      console.warn(
+        '[iii] Worker metrics disabled: OpenTelemetry not initialized. Call initOtel() with metricsEnabled: true before creating the iii.',
+      )
       return
     }
 
@@ -507,22 +544,22 @@ export class Bridge implements BridgeClient {
     this.clearReconnectTimeout()
     this.reconnectAttempt = 0
     this.setConnectionState('connected')
-    
+
     this.ws?.on('message', this.onMessage.bind(this))
 
     this.triggerTypes.forEach(({ message }) => {
       this.sendMessage(MessageType.RegisterTriggerType, message, true)
     })
-    this.services.forEach((service) => {
+    this.services.forEach(service => {
       this.sendMessage(MessageType.RegisterService, service, true)
     })
     this.functions.forEach(({ message }) => {
       this.sendMessage(MessageType.RegisterFunction, message, true)
     })
-    this.triggers.forEach((trigger) => {
+    this.triggers.forEach(trigger => {
       this.sendMessage(MessageType.RegisterTrigger, trigger, true)
     })
-    
+
     // Optimized: swap with empty array instead of splice
     const pending = this.messagesToSend
     this.messagesToSend = []
@@ -548,7 +585,7 @@ export class Bridge implements BridgeClient {
   private sendMessageRaw(data: string): void {
     if (this.ws && this.isOpen()) {
       try {
-        this.ws.send(data, (err) => {
+        this.ws.send(data, err => {
           if (err) {
             this.logError('Failed to send message', err)
           }
@@ -559,39 +596,51 @@ export class Bridge implements BridgeClient {
     }
   }
 
-  private sendMessage(type: MessageType, message: Omit<BridgeMessage, 'type'>, skipIfClosed = false): void {
+  private sendMessage(
+    type: MessageType,
+    message: Omit<IIIMessage, 'type'>,
+    skipIfClosed = false,
+  ): void {
     const fullMessage = { ...message, type }
     if (this.isOpen()) {
       this.sendMessageRaw(JSON.stringify(fullMessage))
     } else if (!skipIfClosed) {
-      this.messagesToSend.push(fullMessage as BridgeMessage)
+      this.messagesToSend.push(fullMessage as IIIMessage)
     }
   }
 
   private logError(message: string, error?: unknown): void {
     const otelLogger = getLogger()
     const errorMessage = error instanceof Error ? error.message : String(error ?? '')
-    
+
     if (otelLogger) {
       otelLogger.emit({
         severityNumber: SeverityNumber.ERROR,
-        body: `[Bridge] ${message}${errorMessage ? `: ${errorMessage}` : ''}`,
+        body: `[iii] ${message}${errorMessage ? `: ${errorMessage}` : ''}`,
       })
     } else {
-      console.error(`[Bridge] ${message}`, error ?? '')
+      console.error(`[iii] ${message}`, error ?? '')
     }
   }
 
   private severityTextToNumber(level: LogSeverityLevel): number {
     switch (level) {
-      case 'trace': return 1
-      case 'debug': return 5
-      case 'info': return 9
-      case 'warn': return 13
-      case 'error': return 17
-      case 'fatal': return 21
-      case 'all': return 0
-      default: return 0
+      case 'trace':
+        return 1
+      case 'debug':
+        return 5
+      case 'info':
+        return 9
+      case 'warn':
+        return 13
+      case 'error':
+        return 17
+      case 'fatal':
+        return 21
+      case 'all':
+        return 0
+      default:
+        return 0
     }
   }
 
@@ -610,12 +659,12 @@ export class Bridge implements BridgeClient {
 
   private async onInvokeFunction<TInput>(
     invocation_id: string | undefined,
-    function_path: string,
+    function_id: string,
     input: TInput,
     traceparent?: string,
     baggage?: string,
   ): Promise<unknown> {
-    const fn = this.functions.get(function_path)
+    const fn = this.functions.get(function_id)
     // Get response traceparent/baggage after handler runs (will be current span's context)
     const getResponseTraceparent = () => injectTraceparent() ?? traceparent
     const getResponseBaggage = () => injectBaggage() ?? baggage
@@ -625,7 +674,7 @@ export class Bridge implements BridgeClient {
         try {
           await fn.handler(input, traceparent, baggage)
         } catch (error) {
-          this.logError(`Error invoking function ${function_path}`, error)
+          this.logError(`Error invoking function ${function_id}`, error)
         }
         return
       }
@@ -634,7 +683,7 @@ export class Bridge implements BridgeClient {
         const result = await fn.handler(input, traceparent, baggage)
         this.sendMessage(MessageType.InvocationResult, {
           invocation_id,
-          function_path,
+          function_id,
           result,
           traceparent: getResponseTraceparent(),
           baggage: getResponseBaggage(),
@@ -642,7 +691,7 @@ export class Bridge implements BridgeClient {
       } catch (error) {
         this.sendMessage(MessageType.InvocationResult, {
           invocation_id,
-          function_path,
+          function_id,
           error: { code: 'invocation_failed', message: (error as Error).message },
           traceparent: getResponseTraceparent(),
           baggage: getResponseBaggage(),
@@ -651,7 +700,7 @@ export class Bridge implements BridgeClient {
     } else {
       this.sendMessage(MessageType.InvocationResult, {
         invocation_id,
-        function_path,
+        function_id,
         error: { code: 'function_not_found', message: 'Function not found' },
         traceparent,
         baggage,
@@ -661,17 +710,17 @@ export class Bridge implements BridgeClient {
 
   private async onRegisterTrigger(message: RegisterTriggerMessage) {
     const triggerTypeData = this.triggerTypes.get(message.trigger_type)
-    const { id, trigger_type, function_path, config } = message
+    const { id, trigger_type, function_id, config } = message
 
     if (triggerTypeData) {
       try {
-        await triggerTypeData.handler.registerTrigger({ id, function_path, config })
-        this.sendMessage(MessageType.TriggerRegistrationResult, { id, trigger_type, function_path })
+        await triggerTypeData.handler.registerTrigger({ id, function_id, config })
+        this.sendMessage(MessageType.TriggerRegistrationResult, { id, trigger_type, function_id })
       } catch (error) {
         this.sendMessage(MessageType.TriggerRegistrationResult, {
           id,
           trigger_type,
-          function_path,
+          function_id,
           error: { code: 'trigger_registration_failed', message: (error as Error).message },
         })
       }
@@ -679,7 +728,7 @@ export class Bridge implements BridgeClient {
       this.sendMessage(MessageType.TriggerRegistrationResult, {
         id,
         trigger_type,
-        function_path,
+        function_id,
         error: { code: 'trigger_type_not_found', message: 'Trigger type not found' },
       })
     }
@@ -687,10 +736,10 @@ export class Bridge implements BridgeClient {
 
   private onMessage(socketMessage: Data): void {
     let type: MessageType
-    let message: Omit<BridgeMessage, 'type'>
-    
+    let message: Omit<IIIMessage, 'type'>
+
     try {
-      const parsed = JSON.parse(socketMessage.toString()) as BridgeMessage
+      const parsed = JSON.parse(socketMessage.toString()) as IIIMessage
       type = parsed.type
       const { type: _, ...rest } = parsed
       message = rest
@@ -703,15 +752,18 @@ export class Bridge implements BridgeClient {
       const { invocation_id, result, error } = message as InvocationResultMessage
       this.onInvocationResult(invocation_id, result, error)
     } else if (type === MessageType.InvokeFunction) {
-      const { invocation_id, function_path, data, traceparent, baggage } = message as InvokeFunctionMessage
-      this.onInvokeFunction(invocation_id, function_path, data, traceparent, baggage)
+      const { invocation_id, function_id, data, traceparent, baggage } =
+        message as InvokeFunctionMessage
+      this.onInvokeFunction(invocation_id, function_id, data, traceparent, baggage)
     } else if (type === MessageType.RegisterTrigger) {
       this.onRegisterTrigger(message as RegisterTriggerMessage)
     } else if (type === MessageType.WorkerRegistered) {
       const { worker_id } = message as WorkerRegisteredMessage
       this.workerId = worker_id
-      console.debug('[Bridge] Worker registered with ID:', worker_id)
+      console.debug('[iii] Worker registered with ID:', worker_id)
       this.startMetricsReporting()
     }
   }
 }
+
+export const init = (address: string, options?: InitOptions): ISdk => new Sdk(address, options)

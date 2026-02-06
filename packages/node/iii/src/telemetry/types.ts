@@ -15,7 +15,12 @@ export const PREFIX_METRICS = 'MTRC'
 export const PREFIX_LOGS = 'LOGS'
 
 /** Connection state for the shared WebSocket */
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'failed'
+export type ConnectionState =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'failed'
 
 /** Configuration for WebSocket reconnection behavior */
 export interface ReconnectionConfig {
@@ -44,7 +49,7 @@ export const DEFAULT_RECONNECTION_CONFIG: ReconnectionConfig = {
 export interface OtelConfig {
   /** Whether OpenTelemetry export is enabled. Defaults to OTEL_ENABLED env var. */
   enabled?: boolean
-  /** The service name to report. Defaults to OTEL_SERVICE_NAME or "iii-node-bridge". */
+  /** The service name to report. Defaults to OTEL_SERVICE_NAME or "iii-node". */
   serviceName?: string
   /** The service version to report. Defaults to SERVICE_VERSION env var or "unknown". */
   serviceVersion?: string

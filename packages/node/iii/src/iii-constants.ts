@@ -1,5 +1,5 @@
 /**
- * Constants for the Bridge module.
+ * Constants for the III module.
  */
 
 /** Engine function paths for internal operations */
@@ -23,11 +23,16 @@ export const LogFunctions = {
   DEBUG: 'log.debug',
 } as const
 
-/** Connection state for the Bridge WebSocket */
-export type BridgeConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'failed'
+/** Connection state for the III WebSocket */
+export type IIIConnectionState =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'failed'
 
 /** Configuration for WebSocket reconnection behavior */
-export interface BridgeReconnectionConfig {
+export interface IIIReconnectionConfig {
   /** Starting delay in milliseconds (default: 1000ms) */
   initialDelayMs: number
   /** Maximum delay cap in milliseconds (default: 30000ms) */
@@ -41,7 +46,7 @@ export interface BridgeReconnectionConfig {
 }
 
 /** Default reconnection configuration */
-export const DEFAULT_BRIDGE_RECONNECTION_CONFIG: BridgeReconnectionConfig = {
+export const DEFAULT_BRIDGE_RECONNECTION_CONFIG: IIIReconnectionConfig = {
   initialDelayMs: 1000,
   maxDelayMs: 30000,
   backoffMultiplier: 2,

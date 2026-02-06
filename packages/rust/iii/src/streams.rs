@@ -5,12 +5,12 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use iii::{Bridge, Streams, UpdateOp};
+//! use iii::{III, Streams, UpdateOp};
 //!
-//! let bridge = Bridge::new("ws://localhost:49134");
-//! bridge.connect().await?;
+//! let iii = III::new("ws://localhost:49134");
+//! iii.connect().await?;
 //!
-//! let streams = Streams::new(bridge.clone());
+//! let streams = Streams::new(iii.clone());
 //!
 //! // Atomic update with multiple operations
 //! let result = streams.update(
@@ -26,21 +26,21 @@
 //! ```
 
 use crate::{
-    bridge::Bridge,
-    error::BridgeError,
+    error::IIIError,
+    iii::III,
     types::{StreamUpdateInput, UpdateOp, UpdateResult},
 };
 
 /// Provides atomic stream update operations
 #[derive(Clone)]
 pub struct Streams {
-    bridge: Bridge,
+    iii: III,
 }
 
 impl Streams {
-    /// Create a new Streams instance with the given bridge
-    pub fn new(bridge: Bridge) -> Self {
-        Self { bridge }
+    /// Create a new Streams instance with the given iii
+    pub fn new(iii: III) -> Self {
+        Self { iii }
     }
 
     /// Perform an atomic update on a stream key
@@ -71,15 +71,15 @@ impl Streams {
         &self,
         key: impl Into<String>,
         ops: Vec<UpdateOp>,
-    ) -> Result<UpdateResult, BridgeError> {
+    ) -> Result<UpdateResult, IIIError> {
         let input = StreamUpdateInput {
             key: key.into(),
             ops,
         };
 
-        let result = self.bridge.invoke_function("streams.update", input).await?;
+        let result = self.iii.invoke_function("streams.update", input).await?;
 
-        serde_json::from_value(result).map_err(|e| BridgeError::Serde(e.to_string()))
+        serde_json::from_value(result).map_err(|e| IIIError::Serde(e.to_string()))
     }
 
     /// Atomically increment a numeric field
@@ -96,7 +96,7 @@ impl Streams {
         key: impl Into<String>,
         field: impl Into<String>,
         by: i64,
-    ) -> Result<UpdateResult, BridgeError> {
+    ) -> Result<UpdateResult, IIIError> {
         self.update(key, vec![UpdateOp::increment(field.into(), by)])
             .await
     }
@@ -109,7 +109,7 @@ impl Streams {
         key: impl Into<String>,
         field: impl Into<String>,
         by: i64,
-    ) -> Result<UpdateResult, BridgeError> {
+    ) -> Result<UpdateResult, IIIError> {
         self.update(key, vec![UpdateOp::decrement(field.into(), by)])
             .await
     }
@@ -128,7 +128,7 @@ impl Streams {
         key: impl Into<String>,
         field: impl Into<String>,
         value: impl Into<serde_json::Value>,
-    ) -> Result<UpdateResult, BridgeError> {
+    ) -> Result<UpdateResult, IIIError> {
         self.update(key, vec![UpdateOp::set(field.into(), value.into())])
             .await
     }
@@ -140,7 +140,7 @@ impl Streams {
         &self,
         key: impl Into<String>,
         field: impl Into<String>,
-    ) -> Result<UpdateResult, BridgeError> {
+    ) -> Result<UpdateResult, IIIError> {
         self.update(key, vec![UpdateOp::remove(field.into())]).await
     }
 
@@ -160,7 +160,7 @@ impl Streams {
         &self,
         key: impl Into<String>,
         value: impl Into<serde_json::Value>,
-    ) -> Result<UpdateResult, BridgeError> {
+    ) -> Result<UpdateResult, IIIError> {
         self.update(key, vec![UpdateOp::merge(value.into())]).await
     }
 }

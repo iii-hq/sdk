@@ -1,5 +1,5 @@
 // import { iii } from '@iii-dev/sdk'
-import { Bridge } from '../src/index'
+import { init } from '../src/index'
 
 const ENGINE_WS_URL = process.env.III_BRIDGE_URL ?? 'ws://localhost:49134'
 const ENGINE_HTTP_URL = process.env.III_HTTP_URL ?? 'http://localhost:3111'
@@ -9,7 +9,7 @@ const DELAY_MS = 100
 export const engineWsUrl = ENGINE_WS_URL
 export const engineHttpUrl = ENGINE_HTTP_URL
 
-export const iii = new Bridge(engineWsUrl)
+export const iii = init(engineWsUrl)
 
 export async function httpRequest(
   method: string,

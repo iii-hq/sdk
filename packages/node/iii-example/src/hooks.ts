@@ -1,16 +1,31 @@
-import { type ApiRequest, type ApiResponse, type Context, type FunctionMessage, getContext, LogCallback, LogConfig } from '@iii-dev/sdk';
-import { bridge } from './bridge';
+import {
+  type ApiRequest,
+  type ApiResponse,
+  type Context,
+  type FunctionMessage,
+  getContext,
+  LogCallback,
+  LogConfig,
+} from '@iii-dev/sdk'
+import { iii } from './iii'
 
 export const useApi = (
-  config: { api_path: string; http_method: string; description?: string; metadata?: Record<string, any> },
+  config: {
+    api_path: string
+    http_method: string
+    description?: string
+    metadata?: Record<string, any>
+  },
   handler: (req: ApiRequest<any>, context: Context) => Promise<ApiResponse>,
 ) => {
-  const function_path = `api.${config.http_method.toLowerCase()}.${config.api_path}`
+  const function_id = `api.${config.http_method.toLowerCase()}.${config.api_path}`
 
-  bridge.registerFunction({ function_path, metadata: config.metadata }, (req) => handler(req, getContext()))
-  bridge.registerTrigger({
+  iii.registerFunction({ id: function_id, metadata: config.metadata }, req =>
+    handler(req, getContext()),
+  )
+  iii.registerTrigger({
     trigger_type: 'api',
-    function_path,
+    function_id,
     config: {
       api_path: config.api_path,
       http_method: config.http_method,
@@ -20,10 +35,12 @@ export const useApi = (
   })
 }
 
-export const useFunctionsAvailable = (callback: (functions: FunctionMessage[]) => void): (() => void) => {
-  return bridge.onFunctionsAvailable(callback)
+export const useFunctionsAvailable = (
+  callback: (functions: FunctionMessage[]) => void,
+): (() => void) => {
+  return iii.onFunctionsAvailable(callback)
 }
 
 export const useOnLog = (handler: LogCallback, config?: LogConfig): (() => void) => {
-  return bridge.onLog(handler, config)
+  return iii.onLog(handler, config)
 }

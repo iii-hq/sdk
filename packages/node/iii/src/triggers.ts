@@ -1,6 +1,6 @@
 type TriggerConfig<TConfig> = {
   id: string
-  function_path: string
+  function_id: string
   config: TConfig
 }
 

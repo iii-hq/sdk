@@ -4,21 +4,18 @@ import { execute, httpRequest, iii } from './utils'
 
 describe('Healthcheck Endpoint', () => {
   it('should register a healthcheck function and trigger', async () => {
-    const functionPath = 'test.healthcheck'
+    const functionId = 'test.healthcheck'
 
-    iii.registerFunction(
-      { function_path: functionPath },
-      async (_req: ApiRequest): Promise<ApiResponse> => {
-        return {
-          status_code: 200,
-          body: {
-            status: 'healthy',
-            timestamp: new Date().toISOString(),
-            service: 'iii-sdk-test',
-          },
-        }
-      },
-    )
+    iii.registerFunction({ id: functionId }, async (_req: ApiRequest): Promise<ApiResponse> => {
+      return {
+        status_code: 200,
+        body: {
+          status: 'healthy',
+          timestamp: new Date().toISOString(),
+          service: 'iii-sdk-test',
+        },
+      }
+    })
 
     await execute(async () => {
       const response = await httpRequest('GET', '/health')
@@ -27,7 +24,7 @@ describe('Healthcheck Endpoint', () => {
 
     const trigger = iii.registerTrigger({
       trigger_type: 'api',
-      function_path: functionPath,
+      function_id: functionId,
       config: {
         api_path: 'health',
         http_method: 'GET',

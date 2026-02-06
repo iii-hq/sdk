@@ -4,7 +4,7 @@ import type {
   RegisterServiceMessage,
   RegisterTriggerMessage,
   RegisterTriggerTypeMessage,
-} from './bridge-types'
+} from './iii-types'
 import type { TriggerHandler } from './triggers'
 import type { IStream } from './streams'
 
@@ -49,7 +49,10 @@ export type LogConfig = {
 
 /** Callback type for log events */
 export type LogCallback = (log: OtelLogEvent) => void
-export type Invocation<TOutput = any> = { resolve: (data: TOutput) => void; reject: (error: any) => void }
+export type Invocation<TOutput = any> = {
+  resolve: (data: TOutput) => void
+  reject: (error: any) => void
+}
 
 /** Internal handler type that includes traceparent and baggage for distributed tracing */
 export type InternalFunctionHandler<TInput = any, TOutput = any> = (
@@ -79,7 +82,7 @@ export type RegisterFunctionInput = Omit<RegisterFunctionMessage, 'type'>
 export type RegisterTriggerTypeInput = Omit<RegisterTriggerTypeMessage, 'type'>
 export type FunctionsAvailableCallback = (functions: FunctionInfo[]) => void
 
-export interface BridgeClient {
+export interface ISdk {
   /**
    * Registers a new trigger. A trigger is a way to invoke a function when a certain event occurs.
    * @param trigger - The trigger to register
@@ -88,34 +91,27 @@ export interface BridgeClient {
   registerTrigger(trigger: RegisterTriggerInput): Trigger
 
   /**
-   * Registers a new service. A service is a collection of functions that are related to each other.
-   * @param service - The service to register
-   * @returns A service object that can be used to unregister the service
-   */
-  registerService(service: RegisterServiceInput): void
-
-  /**
    * Registers a new function. A function is a unit of work that can be invoked by other services.
    * @param func - The function to register
    * @param handler - The handler for the function
    * @returns A function object that can be used to invoke the function
    */
-  registerFunction(func: RegisterFunctionInput, handler: RemoteFunctionHandler): void
+  registerFunction(func: RegisterFunctionInput, handler: RemoteFunctionHandler): FunctionRef
 
   /**
    * Invokes a function.
-   * @param function_path - The path to the function
+   * @param function_id - The path to the function
    * @param data - The data to pass to the function
    * @returns The result of the function
    */
-  invokeFunction<TInput, TOutput>(function_path: string, data: TInput): Promise<TOutput>
+  invokeFunction<TInput, TOutput>(function_id: string, data: TInput): Promise<TOutput>
 
   /**
    * Invokes a function asynchronously.
-   * @param function_path - The path to the function
+   * @param function_id - The path to the function
    * @param data - The data to pass to the function
    */
-  invokeFunctionAsync<TInput>(function_path: string, data: TInput): void
+  invokeFunctionAsync<TInput>(function_id: string, data: TInput): void
 
   /**
    * Registers a new trigger type. A trigger type is a way to invoke a function when a certain event occurs.
@@ -123,7 +119,10 @@ export interface BridgeClient {
    * @param handler - The handler for the trigger type
    * @returns A trigger type object that can be used to unregister the trigger type
    */
-  registerTriggerType<TConfig>(triggerType: RegisterTriggerTypeInput, handler: TriggerHandler<TConfig>): void
+  registerTriggerType<TConfig>(
+    triggerType: RegisterTriggerTypeInput,
+    handler: TriggerHandler<TConfig>,
+  ): void
 
   /**
    * Unregisters a trigger type.
@@ -167,6 +166,11 @@ export type Trigger = {
   unregister(): void
 }
 
+export type FunctionRef = {
+  id: string
+  unregister: () => void
+}
+
 export type ApiRequest<TBody = unknown> = {
   path_params: Record<string, string>
   query_params: Record<string, string | string[]>
@@ -175,7 +179,10 @@ export type ApiRequest<TBody = unknown> = {
   method: string
 }
 
-export type ApiResponse<TStatus extends number = number, TBody = string | Buffer | Record<string, unknown>> = {
+export type ApiResponse<
+  TStatus extends number = number,
+  TBody = string | Buffer | Record<string, unknown>,
+> = {
   status_code: TStatus
   headers?: Record<string, string>
   body: TBody

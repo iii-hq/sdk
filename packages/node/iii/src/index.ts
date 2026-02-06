@@ -1,17 +1,26 @@
-export { Bridge, type BridgeOptions, type ConnectionStateCallback } from './bridge'
-export type { FunctionInfo, FunctionInfo as FunctionMessage, WorkerInfo, WorkerStatus } from './bridge-types'
+export { init, type InitOptions, type ConnectionStateCallback } from './iii'
+export type {
+  FunctionInfo,
+  FunctionInfo as FunctionMessage,
+  WorkerInfo,
+  WorkerStatus,
+} from './iii-types'
 export type { WorkerMetrics } from './worker-metrics'
 export {
-  type BridgeConnectionState,
-  type BridgeReconnectionConfig,
+  type IIIConnectionState,
+  type IIIReconnectionConfig,
   DEFAULT_BRIDGE_RECONNECTION_CONFIG,
   DEFAULT_INVOCATION_TIMEOUT_MS,
   EngineFunctions,
   EngineTriggers,
   LogFunctions,
-} from './bridge-constants'
+} from './iii-constants'
 export { WorkerMetricsCollector } from './worker-metrics'
-export { registerWorkerGauges, stopWorkerGauges, type WorkerGaugesOptions } from './otel-worker-gauges'
+export {
+  registerWorkerGauges,
+  stopWorkerGauges,
+  type WorkerGaugesOptions,
+} from './otel-worker-gauges'
 export { type Context, getContext, withContext } from './context'
 export { Logger } from './logger'
 export * from './streams'

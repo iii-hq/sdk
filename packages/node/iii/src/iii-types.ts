@@ -1,5 +1,6 @@
 export enum MessageType {
   RegisterFunction = 'registerfunction',
+  UnregisterFunction = 'unregisterfunction',
   RegisterService = 'registerservice',
   InvokeFunction = 'invokefunction',
   InvocationResult = 'invocationresult',
@@ -31,7 +32,7 @@ export type TriggerRegistrationResultMessage = {
   type: MessageType.TriggerRegistrationResult
   id: string
   trigger_type: string
-  function_path: string
+  function_id: string
   result?: any
   error?: any
 }
@@ -49,7 +50,7 @@ export type RegisterTriggerMessage = {
    * Example: software.engineering.code.rust
    * Where software, engineering, and code are the service ids
    */
-  function_path: string
+  function_id: string
   config: any
 }
 
@@ -89,7 +90,7 @@ export type RegisterFunctionMessage = {
   /**
    * The path of the function
    */
-  function_path: string
+  id: string
   /**
    * The description of the function
    */
@@ -114,7 +115,7 @@ export type InvokeFunctionMessage = {
   /**
    * The path of the function
    */
-  function_path: string
+  function_id: string
   /**
    * The data to pass to the function
    */
@@ -138,7 +139,7 @@ export type InvocationResultMessage = {
   /**
    * The path of the function
    */
-  function_path: string
+  function_id: string
   result?: any
   error?: any
   /**
@@ -152,7 +153,7 @@ export type InvocationResultMessage = {
 }
 
 export type FunctionInfo = {
-  function_path: string
+  function_id: string
   description?: string
   request_format?: RegisterFunctionFormat
   response_format?: RegisterFunctionFormat
@@ -180,8 +181,14 @@ export type WorkerRegisteredMessage = {
   worker_id: string
 }
 
-export type BridgeMessage =
+export type UnregisterFunctionMessage = {
+  type: MessageType.UnregisterFunction
+  id: string
+}
+
+export type IIIMessage =
   | RegisterFunctionMessage
+  | UnregisterFunctionMessage
   | InvokeFunctionMessage
   | InvocationResultMessage
   | RegisterServiceMessage

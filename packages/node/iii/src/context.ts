@@ -11,14 +11,17 @@ export type Context = {
 
 const globalStorage = new AsyncLocalStorage<Context>()
 
-export const withContext = async <T>(fn: (context: Context) => Promise<T>, ctx: Context): Promise<T> => {
+export const withContext = async <T>(
+  fn: (context: Context) => Promise<T>,
+  ctx: Context,
+): Promise<T> => {
   // Capture the current OTel context before entering AsyncLocalStorage.run()
   // This preserves the OpenTelemetry trace context across async boundaries
   const currentOtelContext = otelContext.active()
-  
+
   return globalStorage.run(ctx, async () => {
     // Restore the OTel context inside the run() scope
-    // This ensures trace propagation works when handlers call bridge.invokeFunction
+    // This ensures trace propagation works when handlers call iii.invokeFunction
     return otelContext.with(currentOtelContext, async () => await fn(ctx))
   })
 }

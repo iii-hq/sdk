@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use iii_sdk::{Bridge, Streams, UpdateBuilder, UpdateOp};
+use iii_sdk::{III, Streams, UpdateBuilder, UpdateOp};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -12,18 +12,18 @@ struct KeyValueData {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let iii_bridge_url = std::env::var("REMOTE_III_URL").unwrap_or("ws://127.0.0.1:49134".into());
-    let bridge = Bridge::new(&iii_bridge_url);
-    bridge.connect().await?;
+    let iii_iii_url = std::env::var("REMOTE_III_URL").unwrap_or("ws://127.0.0.1:49134".into());
+    let iii = III::new(&iii_iii_url);
+    iii.connect().await?;
 
     // Create a Streams instance for atomic updates
-    let streams = Streams::new(bridge.clone());
+    let streams = Streams::new(iii.clone());
 
-    bridge.register_function("example.echo", |input| async move {
+    iii.register_function("example.echo", |input| async move {
         Ok(json!({ "echo": input }))
     });
 
-    let result = bridge
+    let result = iii
         .invoke_function("example.echo", json!({ "message": "hello" }))
         .await?;
     println!("Echo result: {result}");

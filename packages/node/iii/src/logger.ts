@@ -16,7 +16,7 @@ export type LoggerParams = {
  * @deprecated Use OpenTelemetry Logger directly via getLogger() from telemetry module.
  * This invoker pattern is maintained for backward compatibility only.
  */
-export type LoggerInvoker = (function_path: string, params: LoggerParams) => Promise<void> | void
+export type LoggerInvoker = (function_id: string, params: LoggerParams) => Promise<void> | void
 
 export class Logger {
   private _otelLogger: ReturnType<typeof getOtelLogger> | null = null

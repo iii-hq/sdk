@@ -9,20 +9,20 @@ npm install @iii-dev/sdk
 ## Usage
 
 ```javascript
-import { Bridge } from '@iii-dev/sdk'
+import { III } from '@iii-dev/sdk'
 
 /**
  * Make sure the III Core Instance is up and Running on the given URL.
  */
-const bridge = new Bridge(process.env.III_BRIDGE_URL ?? 'ws://localhost:49134')
+const iii = new III(process.env.III_BRIDGE_URL ?? 'ws://localhost:49134')
 
-bridge.registerFunction({ function_path: 'myFunction' }, (req) => {
+iii.registerFunction({ id: 'myFunction' }, (req) => {
   return { status_code: 200, body: { message: 'Hello, world!' } }
 })
 
-bridge.registerTrigger({
+iii.registerTrigger({
   trigger_type: 'api',
-  function_path: 'myFunction',
+  function_id: 'myFunction',
   config: { api_path: 'myApiPath', http_method: 'POST' },
 })
 ```
@@ -32,7 +32,7 @@ bridge.registerTrigger({
 III Allows you to register functions that can be invoked by other services.
 
 ```javascript
-bridge.registerFunction({ function_path: 'myFunction' }, (req) => {
+iii.registerFunction({ id: 'myFunction' }, (req) => {
   // ... do something
   return { status_code: 200, body: { message: 'Hello, world!' } }
 })
@@ -43,9 +43,9 @@ bridge.registerFunction({ function_path: 'myFunction' }, (req) => {
 III Allows you to register triggers that can be invoked by other services.
 
 ```javascript
-bridge.registerTrigger({
+iii.registerTrigger({
   trigger_type: 'api',
-  function_path: 'myFunction',
+  function_id: 'myFunction',
   config: { api_path: 'myApiPath', http_method: 'POST' },
 })
 ```
@@ -55,7 +55,7 @@ bridge.registerTrigger({
 Triggers are mostly created by III Core Modules, but you can also create your own triggers
 
 ```javascript
-bridge.registerTrigger_type(
+iii.registerTrigger_type(
   {
     /**
      * This is the id of the trigger type, it's unique.
@@ -66,7 +66,7 @@ bridge.registerTrigger_type(
   },
   {
     /**
-     * Trigger config has: id, function_path, and config.
+     * Trigger config has: id, function_id, and config.
      * Your logic should know what to do with the config.
      */
     registerTrigger: async (config) => {
@@ -85,7 +85,7 @@ III Allows you to invoke functions, they can be functions from the Core Modules 
 functions registered by workers.
 
 ```javascript
-const result = await bridge.invokeFunction('myFunction', { param1: 'value1' })
+const result = await iii.invokeFunction('myFunction', { param1: 'value1' })
 console.log(result)
 ```
 
@@ -94,7 +94,7 @@ console.log(result)
 III Allows you to invoke functions asynchronously, they can be functions from the Core Modules or functions registered by workers.
 
 ```javascript
-bridge.invokeFunctionAsync('myFunction', { param1: 'value1' })
+iii.invokeFunctionAsync('myFunction', { param1: 'value1' })
 ```
 
 This means the Engine won't hold the execution of the function, it will return immediately. Which means the function will be executed in the background.

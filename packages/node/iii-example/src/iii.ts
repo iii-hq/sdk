@@ -1,10 +1,10 @@
-import { Bridge } from '@iii-dev/sdk'
+import { init } from '@iii-dev/sdk'
 import { version } from '../package.json'
 
-// Engine WebSocket URL - used for both Bridge and telemetry
+// Engine WebSocket URL - used for both III and telemetry
 const engineWsUrl = process.env.III_BRIDGE_URL ?? 'ws://localhost:49134'
 
-export const bridge = new Bridge(engineWsUrl, {
+export const iii = init(engineWsUrl, {
   otel: {
     enabled: true,
     serviceName: 'iii-example',

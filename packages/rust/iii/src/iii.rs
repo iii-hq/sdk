@@ -21,7 +21,7 @@ const SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 use crate::{
     context::{Context, with_context},
-    error::BridgeError,
+    error::IIIError,
     logger::{Logger, LoggerInvoker},
     protocol::{
         ErrorBody, Message, RegisterFunctionMessage, RegisterServiceMessage,
@@ -52,7 +52,7 @@ pub struct WorkerInfo {
 /// Function information returned by `engine.functions.list`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionInfo {
-    pub function_path: String,
+    pub function_id: String,
     pub description: Option<String>,
     pub request_format: Option<Value>,
     pub response_format: Option<Value>,
@@ -64,7 +64,7 @@ pub struct FunctionInfo {
 pub struct TriggerInfo {
     pub id: String,
     pub trigger_type: String,
-    pub function_path: String,
+    pub function_id: String,
     pub config: Value,
 }
 
@@ -104,7 +104,7 @@ enum Outbound {
     Shutdown,
 }
 
-type PendingInvocation = oneshot::Sender<Result<Value, BridgeError>>;
+type PendingInvocation = oneshot::Sender<Result<Value, IIIError>>;
 
 // WebSocket transmitter type alias
 type WsTx = futures_util::stream::SplitSink<
@@ -115,7 +115,7 @@ type WsTx = futures_util::stream::SplitSink<
 /// Callback function type for functions available events
 pub type FunctionsAvailableCallback = Arc<dyn Fn(Vec<FunctionInfo>) + Send + Sync>;
 
-struct BridgeInner {
+struct IIIInner {
     address: String,
     outbound: mpsc::UnboundedSender<Outbound>,
     receiver: Mutex<Option<mpsc::UnboundedReceiver<Outbound>>>,
@@ -129,25 +129,25 @@ struct BridgeInner {
     worker_metadata: Mutex<Option<WorkerMetadata>>,
     functions_available_callbacks: Mutex<HashMap<usize, FunctionsAvailableCallback>>,
     functions_available_callback_counter: AtomicUsize,
-    functions_available_function_path: Mutex<Option<String>>,
+    functions_available_function_id: Mutex<Option<String>>,
     functions_available_trigger: Mutex<Option<Trigger>>,
 }
 
 #[derive(Clone)]
-pub struct Bridge {
-    inner: Arc<BridgeInner>,
+pub struct III {
+    inner: Arc<IIIInner>,
 }
 
 /// Guard that unsubscribes from functions available events when dropped
 pub struct FunctionsAvailableGuard {
-    bridge: Bridge,
+    iii: III,
     callback_id: usize,
 }
 
 impl Drop for FunctionsAvailableGuard {
     fn drop(&mut self) {
         let mut callbacks = self
-            .bridge
+            .iii
             .inner
             .functions_available_callbacks
             .lock()
@@ -156,7 +156,7 @@ impl Drop for FunctionsAvailableGuard {
 
         if callbacks.is_empty() {
             let mut trigger = self
-                .bridge
+                .iii
                 .inner
                 .functions_available_trigger
                 .lock()
@@ -168,16 +168,16 @@ impl Drop for FunctionsAvailableGuard {
     }
 }
 
-impl Bridge {
-    /// Create a new Bridge with default worker metadata (auto-detected runtime, os, hostname)
+impl III {
+    /// Create a new III with default worker metadata (auto-detected runtime, os, hostname)
     pub fn new(address: &str) -> Self {
         Self::with_metadata(address, WorkerMetadata::default())
     }
 
-    /// Create a new Bridge with custom worker metadata
+    /// Create a new III with custom worker metadata
     pub fn with_metadata(address: &str, metadata: WorkerMetadata) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
-        let inner = BridgeInner {
+        let inner = IIIInner {
             address: address.into(),
             outbound: tx,
             receiver: Mutex::new(Some(rx)),
@@ -191,7 +191,7 @@ impl Bridge {
             worker_metadata: Mutex::new(Some(metadata)),
             functions_available_callbacks: Mutex::new(HashMap::new()),
             functions_available_callback_counter: AtomicUsize::new(0),
-            functions_available_function_path: Mutex::new(None),
+            functions_available_function_id: Mutex::new(None),
             functions_available_trigger: Mutex::new(None),
         };
         Self {
@@ -204,7 +204,7 @@ impl Bridge {
         *self.inner.worker_metadata.lock().unwrap() = Some(metadata);
     }
 
-    pub async fn connect(&self) -> Result<(), BridgeError> {
+    pub async fn connect(&self) -> Result<(), IIIError> {
         if self.inner.started.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
@@ -214,11 +214,11 @@ impl Bridge {
             return Ok(());
         };
 
-        let bridge = self.clone();
+        let iii = self.clone();
 
         tokio::spawn(async move {
-            bridge.inner.running.store(true, Ordering::SeqCst);
-            bridge.run_connection(rx).await;
+            iii.inner.running.store(true, Ordering::SeqCst);
+            iii.run_connection(rx).await;
         });
 
         Ok(())
@@ -229,13 +229,13 @@ impl Bridge {
         let _ = self.inner.outbound.send(Outbound::Shutdown);
     }
 
-    pub fn register_function<F, Fut>(&self, function_path: impl Into<String>, handler: F)
+    pub fn register_function<F, Fut>(&self, id: impl Into<String>, handler: F)
     where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
-        Fut: std::future::Future<Output = Result<Value, BridgeError>> + Send + 'static,
+        Fut: std::future::Future<Output = Result<Value, IIIError>> + Send + 'static,
     {
         let message = RegisterFunctionMessage {
-            function_path: function_path.into(),
+            id: id.into(),
             description: None,
             request_format: None,
             response_format: None,
@@ -247,15 +247,15 @@ impl Bridge {
 
     pub fn register_function_with_description<F, Fut>(
         &self,
-        function_path: impl Into<String>,
+        id: impl Into<String>,
         description: impl Into<String>,
         handler: F,
     ) where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
-        Fut: std::future::Future<Output = Result<Value, BridgeError>> + Send + 'static,
+        Fut: std::future::Future<Output = Result<Value, IIIError>> + Send + 'static,
     {
         let message = RegisterFunctionMessage {
-            function_path: function_path.into(),
+            id: id.into(),
             description: Some(description.into()),
             request_format: None,
             response_format: None,
@@ -268,27 +268,27 @@ impl Bridge {
     pub fn register_function_with<F, Fut>(&self, message: RegisterFunctionMessage, handler: F)
     where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
-        Fut: std::future::Future<Output = Result<Value, BridgeError>> + Send + 'static,
+        Fut: std::future::Future<Output = Result<Value, IIIError>> + Send + 'static,
     {
-        let function_path = message.function_path.clone();
-        let bridge = self.clone();
+        let function_id = message.id.clone();
+        let iii = self.clone();
 
         let user_handler = Arc::new(move |input: Value| Box::pin(handler(input)));
 
         let wrapped_handler: RemoteFunctionHandler = Arc::new(move |input: Value| {
-            let function_path = function_path.clone();
-            let bridge = bridge.clone();
+            let function_id = function_id.clone();
+            let iii = iii.clone();
             let user_handler = user_handler.clone();
 
             Box::pin(async move {
                 let invoker: LoggerInvoker = Arc::new(move |path, params| {
-                    let _ = bridge.invoke_function_async(path, params);
+                    let _ = iii.invoke_function_async(path, params);
                 });
 
                 let logger = Logger::new(
                     Some(invoker),
                     Some(Uuid::new_v4().to_string()),
-                    Some(function_path.clone()),
+                    Some(function_id.clone()),
                 );
                 let context = Context { logger };
 
@@ -305,7 +305,7 @@ impl Bridge {
             .functions
             .lock()
             .unwrap()
-            .insert(message.function_path.clone(), data);
+            .insert(message.id.clone(), data);
         let _ = self.send_message(message.to_message());
     }
 
@@ -377,15 +377,15 @@ impl Bridge {
     pub fn register_trigger(
         &self,
         trigger_type: impl Into<String>,
-        function_path: impl Into<String>,
+        function_id: impl Into<String>,
         config: impl serde::Serialize,
-    ) -> Result<Trigger, BridgeError> {
+    ) -> Result<Trigger, IIIError> {
         let id = Uuid::new_v4().to_string();
         let config = serde_json::to_value(config)?;
         let message = RegisterTriggerMessage {
             id: id.clone(),
             trigger_type: trigger_type.into(),
-            function_path: function_path.into(),
+            function_id: function_id.into(),
             config,
         };
 
@@ -396,16 +396,16 @@ impl Bridge {
             .insert(message.id.clone(), message.clone());
         let _ = self.send_message(message.to_message());
 
-        let bridge = self.clone();
+        let iii = self.clone();
         let trigger_type = message.trigger_type.clone();
         let unregister_id = message.id.clone();
         let unregister_fn = Arc::new(move || {
-            let _ = bridge.inner.triggers.lock().unwrap().remove(&unregister_id);
+            let _ = iii.inner.triggers.lock().unwrap().remove(&unregister_id);
             let msg = UnregisterTriggerMessage {
                 id: unregister_id.clone(),
                 trigger_type: trigger_type.clone(),
             };
-            let _ = bridge.send_message(msg.to_message());
+            let _ = iii.send_message(msg.to_message());
         });
 
         Ok(Trigger::new(unregister_fn))
@@ -413,20 +413,20 @@ impl Bridge {
 
     pub async fn invoke_function(
         &self,
-        function_path: &str,
+        function_id: &str,
         data: impl serde::Serialize,
-    ) -> Result<Value, BridgeError> {
+    ) -> Result<Value, IIIError> {
         let value = serde_json::to_value(data)?;
-        self.invoke_function_with_timeout(function_path, value, DEFAULT_TIMEOUT)
+        self.invoke_function_with_timeout(function_id, value, DEFAULT_TIMEOUT)
             .await
     }
 
     pub async fn invoke_function_with_timeout(
         &self,
-        function_path: &str,
+        function_id: &str,
         data: Value,
         timeout: Duration,
-    ) -> Result<Value, BridgeError> {
+    ) -> Result<Value, IIIError> {
         let invocation_id = Uuid::new_v4();
         let (tx, rx) = oneshot::channel();
 
@@ -434,38 +434,38 @@ impl Bridge {
 
         self.send_message(Message::InvokeFunction {
             invocation_id: Some(invocation_id),
-            function_path: function_path.to_string(),
+            function_id: function_id.to_string(),
             data,
         })?;
 
         match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(result)) => result,
-            Ok(Err(_)) => Err(BridgeError::NotConnected),
+            Ok(Err(_)) => Err(IIIError::NotConnected),
             Err(_) => {
                 self.inner.pending.lock().unwrap().remove(&invocation_id);
-                Err(BridgeError::Timeout)
+                Err(IIIError::Timeout)
             }
         }
     }
 
     pub fn invoke_function_async<TInput>(
         &self,
-        function_path: &str,
+        function_id: &str,
         data: TInput,
-    ) -> Result<(), BridgeError>
+    ) -> Result<(), IIIError>
     where
         TInput: Serialize,
     {
         let value = serde_json::to_value(data)?;
         self.send_message(Message::InvokeFunction {
             invocation_id: None,
-            function_path: function_path.to_string(),
+            function_id: function_id.to_string(),
             data: value,
         })
     }
 
     /// List all registered functions from the engine
-    pub async fn list_functions(&self) -> Result<Vec<FunctionInfo>, BridgeError> {
+    pub async fn list_functions(&self) -> Result<Vec<FunctionInfo>, IIIError> {
         let result = self
             .invoke_function("engine.functions.list", serde_json::json!({}))
             .await?;
@@ -500,10 +500,10 @@ impl Bridge {
         let mut trigger_guard = self.inner.functions_available_trigger.lock().unwrap();
         if trigger_guard.is_none() {
             // Get or create function path (reuse existing if trigger registration previously failed)
-            let function_path = {
-                let mut path_guard = self.inner.functions_available_function_path.lock().unwrap();
+            let function_id = {
+                let mut path_guard = self.inner.functions_available_function_id.lock().unwrap();
                 if path_guard.is_none() {
-                    let path = format!("bridge.on_functions_available.{}", Uuid::new_v4());
+                    let path = format!("iii.on_functions_available.{}", Uuid::new_v4());
                     *path_guard = Some(path.clone());
                     path
                 } else {
@@ -517,11 +517,11 @@ impl Bridge {
                 .functions
                 .lock()
                 .unwrap()
-                .contains_key(&function_path);
+                .contains_key(&function_id);
             if !function_exists {
-                let bridge = self.clone();
-                self.register_function(function_path.clone(), move |input: Value| {
-                    let bridge = bridge.clone();
+                let iii = self.clone();
+                self.register_function(function_id.clone(), move |input: Value| {
+                    let iii = iii.clone();
                     async move {
                         // Extract functions from trigger payload
                         let functions = input
@@ -531,7 +531,7 @@ impl Bridge {
                             })
                             .unwrap_or_default();
 
-                        let callbacks = bridge.inner.functions_available_callbacks.lock().unwrap();
+                        let callbacks = iii.inner.functions_available_callbacks.lock().unwrap();
                         for cb in callbacks.values() {
                             cb(functions.clone());
                         }
@@ -543,7 +543,7 @@ impl Bridge {
             // Register trigger
             match self.register_trigger(
                 "engine::functions-available",
-                function_path,
+                function_id,
                 serde_json::json!({}),
             ) {
                 Ok(trigger) => {
@@ -556,13 +556,13 @@ impl Bridge {
         }
 
         FunctionsAvailableGuard {
-            bridge: self.clone(),
+            iii: self.clone(),
             callback_id,
         }
     }
 
     /// List all connected workers from the engine
-    pub async fn list_workers(&self) -> Result<Vec<WorkerInfo>, BridgeError> {
+    pub async fn list_workers(&self) -> Result<Vec<WorkerInfo>, IIIError> {
         let result = self
             .invoke_function("engine.workers.list", serde_json::json!({}))
             .await?;
@@ -576,7 +576,7 @@ impl Bridge {
     }
 
     /// List all registered triggers from the engine
-    pub async fn list_triggers(&self) -> Result<Vec<TriggerInfo>, BridgeError> {
+    pub async fn list_triggers(&self) -> Result<Vec<TriggerInfo>, IIIError> {
         let result = self
             .invoke_function("engine.triggers.list", serde_json::json!({}))
             .await?;
@@ -596,7 +596,7 @@ impl Bridge {
         }
     }
 
-    fn send_message(&self, message: Message) -> Result<(), BridgeError> {
+    fn send_message(&self, message: Message) -> Result<(), IIIError> {
         if !self.inner.running.load(Ordering::SeqCst) {
             return Ok(());
         }
@@ -604,7 +604,7 @@ impl Bridge {
         self.inner
             .outbound
             .send(Outbound::Message(message))
-            .map_err(|_| BridgeError::NotConnected)
+            .map_err(|_| IIIError::NotConnected)
     }
 
     async fn run_connection(&self, mut rx: mpsc::UnboundedReceiver<Outbound>) {
@@ -613,7 +613,7 @@ impl Bridge {
         while self.inner.running.load(Ordering::SeqCst) {
             match connect_async(&self.inner.address).await {
                 Ok((stream, _)) => {
-                    tracing::info!(address = %self.inner.address, "bridge connected");
+                    tracing::info!(address = %self.inner.address, "iii connected");
                     let (mut ws_tx, mut ws_rx) = stream.split();
 
                     queue.extend(self.collect_registrations());
@@ -710,8 +710,8 @@ impl Bridge {
             let key = match message {
                 Message::RegisterTriggerType { id, .. } => format!("trigger_type:{id}"),
                 Message::RegisterTrigger { id, .. } => format!("trigger:{id}"),
-                Message::RegisterFunction { function_path, .. } => {
-                    format!("function:{function_path}")
+                Message::RegisterFunction { id, .. } => {
+                    format!("function:{id}")
                 }
                 Message::RegisterService { id, .. } => format!("service:{id}"),
                 _ => {
@@ -733,7 +733,7 @@ impl Bridge {
         &self,
         ws_tx: &mut WsTx,
         queue: &mut Vec<Message>,
-    ) -> Result<(), BridgeError> {
+    ) -> Result<(), IIIError> {
         let mut drained = Vec::new();
         std::mem::swap(queue, &mut drained);
 
@@ -749,13 +749,13 @@ impl Bridge {
         Ok(())
     }
 
-    async fn send_ws(&self, ws_tx: &mut WsTx, message: &Message) -> Result<(), BridgeError> {
+    async fn send_ws(&self, ws_tx: &mut WsTx, message: &Message) -> Result<(), IIIError> {
         let payload = serde_json::to_string(message)?;
         ws_tx.send(WsMessage::Text(payload)).await?;
         Ok(())
     }
 
-    fn handle_frame(&self, frame: WsMessage) -> Result<(), BridgeError> {
+    fn handle_frame(&self, frame: WsMessage) -> Result<(), IIIError> {
         match frame {
             WsMessage::Text(text) => self.handle_message(&text),
             WsMessage::Binary(bytes) => {
@@ -766,7 +766,7 @@ impl Bridge {
         }
     }
 
-    fn handle_message(&self, payload: &str) -> Result<(), BridgeError> {
+    fn handle_message(&self, payload: &str) -> Result<(), IIIError> {
         let message: Message = serde_json::from_str(payload)?;
 
         match message {
@@ -780,18 +780,18 @@ impl Bridge {
             }
             Message::InvokeFunction {
                 invocation_id,
-                function_path,
+                function_id,
                 data,
             } => {
-                self.handle_invoke_function(invocation_id, function_path, data);
+                self.handle_invoke_function(invocation_id, function_id, data);
             }
             Message::RegisterTrigger {
                 id,
                 trigger_type,
-                function_path,
+                function_id,
                 config,
             } => {
-                self.handle_register_trigger(id, trigger_type, function_path, config);
+                self.handle_register_trigger(id, trigger_type, function_id, config);
             }
             Message::Ping => {
                 let _ = self.send_message(Message::Pong);
@@ -811,7 +811,7 @@ impl Bridge {
         let sender = self.inner.pending.lock().unwrap().remove(&invocation_id);
         if let Some(sender) = sender {
             let result = match error {
-                Some(error) => Err(BridgeError::Remote {
+                Some(error) => Err(IIIError::Remote {
                     code: error.code,
                     message: error.message,
                 }),
@@ -824,21 +824,21 @@ impl Bridge {
     fn handle_invoke_function(
         &self,
         invocation_id: Option<Uuid>,
-        function_path: String,
+        function_id: String,
         data: Value,
     ) {
-        tracing::debug!(function_path = %function_path, "Invoking function");
+        tracing::debug!(function_id = %function_id, "Invoking function");
 
         let handler = self
             .inner
             .functions
             .lock()
             .unwrap()
-            .get(&function_path)
+            .get(&function_id)
             .map(|data| data.handler.clone());
 
         let Some(handler) = handler else {
-            tracing::warn!(function_path = %function_path, "Invocation: Function not found");
+            tracing::warn!(function_id = %function_id, "Invocation: Function not found");
 
             if let Some(invocation_id) = invocation_id {
                 let error = ErrorBody {
@@ -847,7 +847,7 @@ impl Bridge {
                 };
                 let result = self.send_message(Message::InvocationResult {
                     invocation_id,
-                    function_path,
+                    function_id,
                     result: None,
                     error: Some(error),
                 });
@@ -859,7 +859,7 @@ impl Bridge {
             return;
         };
 
-        let bridge = self.clone();
+        let iii = self.clone();
 
         tokio::spawn(async move {
             let result = handler(data).await;
@@ -868,13 +868,13 @@ impl Bridge {
                 let message = match result {
                     Ok(value) => Message::InvocationResult {
                         invocation_id,
-                        function_path,
+                        function_id,
                         result: Some(value),
                         error: None,
                     },
                     Err(err) => Message::InvocationResult {
                         invocation_id,
-                        function_path,
+                        function_id,
                         result: None,
                         error: Some(ErrorBody {
                             code: "invocation_failed".to_string(),
@@ -883,7 +883,7 @@ impl Bridge {
                     },
                 };
 
-                let _ = bridge.send_message(message);
+                let _ = iii.send_message(message);
             } else if let Err(err) = result {
                 tracing::warn!(error = %err, "error handling async invocation");
             }
@@ -894,7 +894,7 @@ impl Bridge {
         &self,
         id: String,
         trigger_type: String,
-        function_path: String,
+        function_id: String,
         config: Value,
     ) {
         let handler = self
@@ -905,13 +905,13 @@ impl Bridge {
             .get(&trigger_type)
             .map(|data| data.handler.clone());
 
-        let bridge = self.clone();
+        let iii = self.clone();
 
         tokio::spawn(async move {
             let message = if let Some(handler) = handler {
                 let config = TriggerConfig {
                     id: id.clone(),
-                    function_path: function_path.clone(),
+                    function_id: function_id.clone(),
                     config,
                 };
 
@@ -919,13 +919,13 @@ impl Bridge {
                     Ok(()) => Message::TriggerRegistrationResult {
                         id,
                         trigger_type,
-                        function_path,
+                        function_id,
                         error: None,
                     },
                     Err(err) => Message::TriggerRegistrationResult {
                         id,
                         trigger_type,
-                        function_path,
+                        function_id,
                         error: Some(ErrorBody {
                             code: "trigger_registration_failed".to_string(),
                             message: err.to_string(),
@@ -936,7 +936,7 @@ impl Bridge {
                 Message::TriggerRegistrationResult {
                     id,
                     trigger_type,
-                    function_path,
+                    function_id,
                     error: Some(ErrorBody {
                         code: "trigger_type_not_found".to_string(),
                         message: "Trigger type not found".to_string(),
@@ -944,7 +944,7 @@ impl Bridge {
                 }
             };
 
-            let _ = bridge.send_message(message);
+            let _ = iii.send_message(message);
         });
     }
 }
@@ -957,22 +957,22 @@ mod tests {
 
     #[test]
     fn register_trigger_unregister_removes_entry() {
-        let bridge = Bridge::new("ws://localhost:1234");
-        let trigger = bridge
+        let iii = III::new("ws://localhost:1234");
+        let trigger = iii
             .register_trigger("demo", "functions.echo", json!({ "foo": "bar" }))
             .unwrap();
 
-        assert_eq!(bridge.inner.triggers.lock().unwrap().len(), 1);
+        assert_eq!(iii.inner.triggers.lock().unwrap().len(), 1);
 
         trigger.unregister();
 
-        assert_eq!(bridge.inner.triggers.lock().unwrap().len(), 0);
+        assert_eq!(iii.inner.triggers.lock().unwrap().len(), 0);
     }
 
     #[tokio::test]
     async fn invoke_function_times_out_and_clears_pending() {
-        let bridge = Bridge::new("ws://localhost:1234");
-        let result = bridge
+        let iii = III::new("ws://localhost:1234");
+        let result = iii
             .invoke_function_with_timeout(
                 "functions.echo",
                 json!({ "a": 1 }),
@@ -980,7 +980,7 @@ mod tests {
             )
             .await;
 
-        assert!(matches!(result, Err(BridgeError::Timeout)));
-        assert!(bridge.inner.pending.lock().unwrap().is_empty());
+        assert!(matches!(result, Err(IIIError::Timeout)));
+        assert!(iii.inner.pending.lock().unwrap().is_empty());
     }
 }

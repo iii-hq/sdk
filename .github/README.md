@@ -88,6 +88,36 @@ Manual workflows for publishing pre-release versions (alpha, beta, rc):
   - **Inputs:** Target version and reason
   - Deletes problematic release and creates rollback tag
 
+## Pre-commit Hooks
+
+Pre-commit hooks automatically fix linting and formatting issues before commits, preventing fixable failures in CI.
+
+### Setup
+
+1. **Install pre-commit:**
+   ```bash
+   pip install pre-commit
+   ```
+
+2. **Install the git hooks:**
+   ```bash
+   pre-commit install
+   ```
+
+3. **Run on all files (optional, for initial setup):**
+   ```bash
+   pre-commit run --all-files
+   ```
+
+### Configured Hooks
+
+- **Python**: Runs `ruff check --fix` and `mypy` on Python files
+- **Node.js**: Runs `biome check --write` on TypeScript/JavaScript files
+- **Rust**: Runs `cargo fmt --all` on Rust files
+- **General**: Checks for trailing whitespace, end-of-file fixes, YAML validation, and large files
+
+Hooks run automatically on `git commit` and only process staged files. To bypass (not recommended), use `git commit --no-verify`.
+
 ## Release Process
 
 1. **Create Tag:** Run `create-tag.yml` workflow manually

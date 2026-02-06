@@ -21,7 +21,7 @@ export async function checkServerAvailability(): Promise<boolean> {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 2000)
-    
+
     try {
       const response = await fetch(ENGINE_HTTP_URL, {
         method: 'GET',

@@ -11,8 +11,8 @@ export const streams = {
   delete: async (stream_name: string, group_id: string, item_id: string): Promise<void> => {
     return iii.call('streams.delete', { stream_name, group_id, item_id })
   },
-  getGroup: async (stream_name: string, group_id: string): Promise<any[]> => {
-    return iii.call('streams.getGroup', { stream_name, group_id })
+  list: async (stream_name: string, group_id: string): Promise<any[]> => {
+    return iii.call('streams.list', { stream_name, group_id })
   },
   listGroups: async (stream_name: string): Promise<string[]> => {
     return iii.call('streams.listGroups', { stream_name })
@@ -49,7 +49,7 @@ iii.createStream('todo', {
     todoState = todoState.filter(todo => todo.id !== input.item_id)
     return { old_value }
   },
-  getGroup: async input => todoState.filter(todo => todo.groupId === input.group_id),
+  list: async input => todoState.filter(todo => todo.groupId === input.group_id),
   listGroups: async () => [...new Set(todoState.map(todo => todo.groupId))],
   update: async () => {
     throw new Error('Not implemented')

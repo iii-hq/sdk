@@ -184,10 +184,11 @@ describe('Stream Operations', () => {
           state.delete(`${input.group_id}::${input.item_id}`)
           return { old_value: oldValue }
         },
-        getGroup: async input =>
-          Array.from(state.keys())
+        list: async input => {
+          return Array.from(state.keys())
             .filter(key => key.startsWith(`${input.group_id}::`))
-            .map(key => state.get(key)),
+            .map(key => state.get(key))
+        },
         listGroups: async () => Array.from(state.keys()),
         update: async () => {
           throw new Error('Not implemented')

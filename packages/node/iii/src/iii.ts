@@ -41,7 +41,7 @@ import {
   SpanKind,
   withSpan,
   type OtelConfig,
-} from './telemetry'
+} from './telemetry-system'
 import { registerWorkerGauges, stopWorkerGauges } from './otel-worker-gauges'
 import type { TriggerHandler } from './triggers'
 import type {
@@ -296,7 +296,7 @@ class Sdk implements ISdk {
     this.registerFunction({ id: `streams.get(${streamName})` }, stream.get.bind(stream))
     this.registerFunction({ id: `streams.set(${streamName})` }, stream.set.bind(stream))
     this.registerFunction({ id: `streams.delete(${streamName})` }, stream.delete.bind(stream))
-    this.registerFunction({ id: `streams.getGroup(${streamName})` }, stream.getGroup.bind(stream))
+    this.registerFunction({ id: `streams.list(${streamName})` }, stream.list.bind(stream))
     this.registerFunction(
       { id: `streams.listGroups(${streamName})` },
       stream.listGroups.bind(stream),

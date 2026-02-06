@@ -21,7 +21,7 @@ export const withContext = async <T>(
 
   return globalStorage.run(ctx, async () => {
     // Restore the OTel context inside the run() scope
-    // This ensures trace propagation works when handlers call iii.invokeFunction
+    // This ensures trace propagation works when handlers call iii.call
     return otelContext.with(currentOtelContext, async () => await fn(ctx))
   })
 }

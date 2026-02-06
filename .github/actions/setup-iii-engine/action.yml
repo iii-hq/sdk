@@ -39,8 +39,14 @@ runs:
         echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
 
         if [ "$ENGINE_VERSION" = "latest" ]; then
-          RELEASE_TAG=$(gh api repos/$ENGINE_REPO/releases/latest --jq .tag_name 2>/dev/null || echo "")
-          if [ -z "$RELEASE_TAG" ]; then
+          if ! RELEASE_TAG=$(gh api repos/$ENGINE_REPO/releases/latest --jq .tag_name 2>/dev/null); then
+            echo "Could not find latest release in $ENGINE_REPO"
+            echo "release_tag=" >> $GITHUB_OUTPUT
+            echo "engine_available=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          if [ -z "$RELEASE_TAG" ] || [ "$RELEASE_TAG" = "null" ] || [[ "$RELEASE_TAG" == *"message"* ]] || [[ "$RELEASE_TAG" == *"Not Found"* ]]; then
+            echo "Invalid release tag returned: $RELEASE_TAG"
             echo "Could not find latest release in $ENGINE_REPO"
             echo "release_tag=" >> $GITHUB_OUTPUT
             echo "engine_available=false" >> $GITHUB_OUTPUT

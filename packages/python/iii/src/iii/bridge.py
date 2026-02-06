@@ -305,7 +305,9 @@ class Bridge:
 
         self._functions[path] = RemoteFunctionData(message=msg, handler=wrapped)
 
-    def function(self, path: str, description: str | None = None) -> Callable[[RemoteFunctionHandler], RemoteFunctionHandler]:
+    def function(
+        self, path: str, description: str | None = None
+    ) -> Callable[[RemoteFunctionHandler], RemoteFunctionHandler]:
         """Decorator to register a function."""
 
         def decorator(handler: RemoteFunctionHandler) -> RemoteFunctionHandler:

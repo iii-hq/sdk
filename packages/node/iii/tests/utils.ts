@@ -17,6 +17,27 @@ export const iii = init(engineWsUrl, {
   },
 })
 
+export async function checkServerAvailability(): Promise<boolean> {
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 2000)
+    
+    try {
+      const response = await fetch(ENGINE_HTTP_URL, {
+        method: 'GET',
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      return response.status < 500
+    } catch {
+      clearTimeout(timeoutId)
+      return false
+    }
+  } catch {
+    return false
+  }
+}
+
 export async function httpRequest(
   method: string,
   path: string,

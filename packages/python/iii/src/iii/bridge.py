@@ -8,7 +8,7 @@ import platform
 import uuid
 from dataclasses import dataclass
 from importlib.metadata import version
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Coroutine, cast
 
 import websockets
 from websockets.asyncio.client import ClientConnection
@@ -109,12 +109,12 @@ class Bridge:
 
     async def _on_connected(self) -> None:
         # Re-register all
-        for data in self._trigger_types.values():
-            await self._send(data.message)
+        for trigger_type_data in self._trigger_types.values():
+            await self._send(trigger_type_data.message)
         for svc in self._services.values():
             await self._send(svc)
-        for data in self._functions.values():
-            await self._send(data.message)
+        for function_data in self._functions.values():
+            await self._send(function_data.message)
         for trigger in self._triggers.values():
             await self._send(trigger)
 
@@ -145,7 +145,7 @@ class Bridge:
         if isinstance(msg, dict):
             return msg
         if hasattr(msg, "model_dump"):
-            data = msg.model_dump(by_alias=True, exclude_none=True)
+            data: dict[str, Any] = msg.model_dump(by_alias=True, exclude_none=True)
             if "type" in data and hasattr(data["type"], "value"):
                 data["type"] = data["type"].value
             return data
@@ -211,7 +211,8 @@ class Bridge:
             return
 
         if not invocation_id:
-            asyncio.create_task(func.handler(data))
+            coro = cast(Coroutine[Any, Any, Any], func.handler(data))
+            asyncio.create_task(coro)
             return
 
         try:
@@ -304,7 +305,7 @@ class Bridge:
 
         self._functions[path] = RemoteFunctionData(message=msg, handler=wrapped)
 
-    def function(self, path: str, description: str | None = None):
+    def function(self, path: str, description: str | None = None) -> Callable[[RemoteFunctionHandler], RemoteFunctionHandler]:
         """Decorator to register a function."""
 
         def decorator(handler: RemoteFunctionHandler) -> RemoteFunctionHandler:

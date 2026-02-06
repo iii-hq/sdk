@@ -51,8 +51,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint
+        working-directory: .
+        run: npx @biomejs/biome check packages/node
+
       - name: Type check
         run: pnpm --filter @iii-dev/sdk exec tsc --noEmit
+
+      - name: Test
+        run: pnpm --filter @iii-dev/sdk test
 
       - name: Build
         run: pnpm build

@@ -7,7 +7,6 @@ on:
       - completed
 
 env:
-  CARGO_TERM_COLOR: always
   GH_TOKEN: ${{ github.token }}
 
 permissions:
@@ -23,6 +22,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Get release tag
         id: get_tag
@@ -32,25 +33,20 @@ jobs:
             echo "No tag found, skipping validation"
             exit 0
           fi
+          VERSION="${TAG#v}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Validating release: $TAG"
 
       - name: Download Slack notification data
         id: download_slack
         continue-on-error: true
         run: |
-          echo "Attempting to download artifact from workflow run ${{ github.event.workflow_run.id }}"
-          
-          # List artifacts for the workflow run
           ARTIFACTS=$(gh api \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts")
           
-          echo "Available artifacts:"
-          echo "$ARTIFACTS" | jq -r '.artifacts[] | .name'
-          
-          # Find the slack-notification-data artifact
           ARTIFACT_ID=$(echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.name=="slack-notification-data") | .id')
           
           if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" == "null" ]; then
@@ -58,20 +54,13 @@ jobs:
             exit 0
           fi
           
-          echo "Found artifact ID: $ARTIFACT_ID"
-          
-          # Download the artifact
           mkdir -p slack-data
           gh api \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "/repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > artifact.zip
           
-          # Extract the artifact
           unzip -q artifact.zip -d slack-data/
-          
-          echo "Artifact downloaded successfully"
-          ls -la slack-data/
 
       - name: Get Slack message timestamp
         id: get_slack_ts
@@ -80,37 +69,19 @@ jobs:
             SLACK_TS=$(cat slack-data/message_ts.txt)
             echo "slack_ts=$SLACK_TS" >> $GITHUB_OUTPUT
             echo "has_slack_ts=true" >> $GITHUB_OUTPUT
-            echo "Found Slack timestamp: $SLACK_TS"
           else
             echo "has_slack_ts=false" >> $GITHUB_OUTPUT
-            echo "No Slack timestamp found, will send new message"
           fi
 
-      - name: Download release assets
+      - name: Validate Rust binaries
+        id: validate_binaries
         run: |
           TAG="${{ steps.get_tag.outputs.tag }}"
-          if [ -z "$TAG" ]; then
-            exit 0
-          fi
+          if [ -z "$TAG" ]; then exit 0; fi
           
-          echo "Downloading assets for release $TAG"
           mkdir -p release-assets
           cd release-assets
-          
-          gh release download "$TAG" || {
-            echo "Failed to download release assets"
-            exit 1
-          }
-          
-          ls -lh
-
-      - name: Validate all platforms present
-        id: validate_platforms
-        run: |
-          TAG="${{ steps.get_tag.outputs.tag }}"
-          if [ -z "$TAG" ]; then
-            exit 0
-          fi
+          gh release download "$TAG" || { echo "Failed to download release assets"; exit 1; }
           
           EXPECTED_PLATFORMS=(
             "x86_64-apple-darwin"
@@ -124,43 +95,101 @@ jobs:
             "armv7-unknown-linux-gnueabihf"
           )
           
-          MISSING_PLATFORMS=()
-          
+          MISSING=()
           for platform in "${EXPECTED_PLATFORMS[@]}"; do
             if [[ "$platform" == *"windows"* ]]; then
-              FILE="release-assets/iii-${platform}.zip"
+              FILE="iii-${platform}.zip"
             else
-              FILE="release-assets/iii-${platform}.tar.gz"
+              FILE="iii-${platform}.tar.gz"
             fi
             
             if [ ! -f "$FILE" ]; then
-              echo "❌ Missing: $FILE"
-              MISSING_PLATFORMS+=("$platform")
+              echo "Missing: $FILE"
+              MISSING+=("$platform")
             else
-              echo "✅ Found: $FILE"
-              SIZE=$(stat -f%z "$FILE" 2>/dev/null || stat -c%s "$FILE" 2>/dev/null)
+              SIZE=$(stat -c%s "$FILE" 2>/dev/null || stat -f%z "$FILE" 2>/dev/null)
               if [ "$SIZE" -lt 100000 ]; then
-                echo "⚠️  Warning: $FILE is suspiciously small ($SIZE bytes)"
-                MISSING_PLATFORMS+=("$platform (too small)")
+                echo "Warning: $FILE is suspiciously small ($SIZE bytes)"
+                MISSING+=("$platform (too small)")
+              else
+                echo "OK: $FILE ($SIZE bytes)"
               fi
             fi
           done
           
-          if [ ${#MISSING_PLATFORMS[@]} -gt 0 ]; then
-            echo "validation_failed=true" >> $GITHUB_OUTPUT
-            echo "missing_platforms=${MISSING_PLATFORMS[*]}" >> $GITHUB_OUTPUT
-            echo ""
-            echo "❌ Validation FAILED - Missing or invalid platforms:"
-            printf '%s\n' "${MISSING_PLATFORMS[@]}"
-            exit 1
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "binaries_ok=false" >> $GITHUB_OUTPUT
+            echo "missing=${MISSING[*]}" >> $GITHUB_OUTPUT
           else
-            echo "validation_failed=false" >> $GITHUB_OUTPUT
-            echo ""
-            echo "✅ All platforms validated successfully"
+            echo "binaries_ok=true" >> $GITHUB_OUTPUT
+            echo "All 9 platform binaries validated"
           fi
 
+      - name: Validate Node SDK on npm
+        id: validate_node
+        continue-on-error: true
+        run: |
+          VERSION="${{ steps.get_tag.outputs.version }}"
+          if [ -z "$VERSION" ]; then exit 0; fi
+          
+          for i in 1 2 3 4 5; do
+            if npm view "@iii-dev/sdk@$VERSION" version 2>/dev/null; then
+              echo "node_ok=true" >> $GITHUB_OUTPUT
+              echo "Node SDK $VERSION found on npm"
+              exit 0
+            fi
+            echo "Attempt $i: not yet available, waiting 30s..."
+            sleep 30
+          done
+          
+          echo "node_ok=false" >> $GITHUB_OUTPUT
+          echo "Node SDK $VERSION not found on npm after retries"
+
+      - name: Validate Python SDK on PyPI
+        id: validate_python
+        continue-on-error: true
+        run: |
+          VERSION="${{ steps.get_tag.outputs.version }}"
+          if [ -z "$VERSION" ]; then exit 0; fi
+          
+          for i in 1 2 3 4 5; do
+            if pip index versions iii-sdk 2>/dev/null | grep -q "$VERSION"; then
+              echo "python_ok=true" >> $GITHUB_OUTPUT
+              echo "Python SDK $VERSION found on PyPI"
+              exit 0
+            fi
+            echo "Attempt $i: not yet available, waiting 30s..."
+            sleep 30
+          done
+          
+          echo "python_ok=false" >> $GITHUB_OUTPUT
+          echo "Python SDK $VERSION not found on PyPI after retries"
+
+      - name: Validate Rust SDK on crates.io
+        id: validate_rust
+        continue-on-error: true
+        run: |
+          VERSION="${{ steps.get_tag.outputs.version }}"
+          if [ -z "$VERSION" ]; then exit 0; fi
+          
+          for i in 1 2 3 4 5; do
+            RESPONSE=$(curl -s "https://crates.io/api/v1/crates/iii-sdk/$VERSION")
+            if echo "$RESPONSE" | jq -e '.version.num' 2>/dev/null | grep -q "$VERSION"; then
+              echo "rust_ok=true" >> $GITHUB_OUTPUT
+              echo "Rust SDK $VERSION found on crates.io"
+              exit 0
+            fi
+            echo "Attempt $i: not yet available, waiting 30s..."
+            sleep 30
+          done
+          
+          echo "rust_ok=false" >> $GITHUB_OUTPUT
+          echo "Rust SDK $VERSION not found on crates.io after retries"
+
       - name: Update Slack - Validation Success
-        if: success() && steps.get_slack_ts.outputs.has_slack_ts == 'true'
+        if: >-
+          steps.validate_binaries.outputs.binaries_ok == 'true' &&
+          steps.get_slack_ts.outputs.has_slack_ts == 'true'
         uses: slackapi/slack-github-action@v2.0.0
         with:
           method: chat.update
@@ -168,50 +197,25 @@ jobs:
           payload: |
             channel: ${{ secrets.SLACK_CHANNEL_ID }}
             ts: ${{ steps.get_slack_ts.outputs.slack_ts }}
-            text: "✅ Release ${{ steps.get_tag.outputs.tag }} completed successfully"
+            text: "Release ${{ steps.get_tag.outputs.tag }} validated"
             blocks:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Release ${{ steps.get_tag.outputs.tag }}* ✅\n\n✅ Tests passed\n✅ Release created\n✅ Binaries built (9/9)\n✅ Validation passed"
+                  text: "*Release ${{ steps.get_tag.outputs.tag }}* :white_check_mark:\n\n:white_check_mark: Rust binaries (9/9)\n:${{ steps.validate_node.outputs.node_ok == 'true' && 'white_check_mark' || 'warning' }}: Node SDK on npm\n:${{ steps.validate_python.outputs.python_ok == 'true' && 'white_check_mark' || 'warning' }}: Python SDK on PyPI\n:${{ steps.validate_rust.outputs.rust_ok == 'true' && 'white_check_mark' || 'warning' }}: Rust SDK on crates.io"
               - type: "actions"
                 elements:
                   - type: "button"
                     text:
                       type: "plain_text"
-                      text: "📦 Download Release"
-                    url: "${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.get_tag.outputs.tag }}"
-                    style: "primary"
-              - type: "context"
-                elements:
-                  - type: "mrkdwn"
-                    text: "Release completed successfully"
-
-      - name: Notify Slack - Validation Success (Fallback)
-        if: success() && steps.get_slack_ts.outputs.has_slack_ts != 'true'
-        uses: slackapi/slack-github-action@v2.0.0
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          payload: |
-            channel: ${{ secrets.SLACK_CHANNEL_ID }}
-            text: "✅ Release ${{ steps.get_tag.outputs.tag }} validated successfully"
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "*Release Validated* ✅\nVersion: `${{ steps.get_tag.outputs.tag }}`\nAll 9 platform binaries present and valid"
-              - type: "actions"
-                elements:
-                  - type: "button"
-                    text:
-                      type: "plain_text"
-                      text: "📦 Download Release"
+                      text: "Download Release"
                     url: "${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.get_tag.outputs.tag }}"
                     style: "primary"
 
       - name: Update Slack - Validation Failed
-        if: failure() && steps.get_slack_ts.outputs.has_slack_ts == 'true'
+        if: >-
+          steps.validate_binaries.outputs.binaries_ok != 'true' &&
+          steps.get_slack_ts.outputs.has_slack_ts == 'true'
         uses: slackapi/slack-github-action@v2.0.0
         with:
           method: chat.update
@@ -219,37 +223,21 @@ jobs:
           payload: |
             channel: ${{ secrets.SLACK_CHANNEL_ID }}
             ts: ${{ steps.get_slack_ts.outputs.slack_ts }}
-            text: "❌ Release ${{ steps.get_tag.outputs.tag }} failed validation"
+            text: "Release ${{ steps.get_tag.outputs.tag }} validation failed"
             blocks:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Release ${{ steps.get_tag.outputs.tag }}* ❌\n\n✅ Tests passed\n✅ Release created\n⚠️ Binaries built (partial)\n❌ Validation failed\n\nMissing platforms: ${{ steps.validate_platforms.outputs.missing_platforms }}\n\n⚠️ *Auto-rollback will be initiated*"
+                  text: "*Release ${{ steps.get_tag.outputs.tag }}* :x:\n\nMissing binaries: ${{ steps.validate_binaries.outputs.missing }}\n\nAuto-rollback will be initiated"
               - type: "context"
                 elements:
                   - type: "mrkdwn"
                     text: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
 
-      - name: Notify Slack - Validation Failed (Fallback)
-        if: failure() && steps.get_slack_ts.outputs.has_slack_ts != 'true'
-        uses: slackapi/slack-github-action@v2.0.0
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          payload: |
-            channel: ${{ secrets.SLACK_CHANNEL_ID }}
-            text: "❌ Release validation failed for ${{ steps.get_tag.outputs.tag }}"
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "*Release Validation Failed* ❌\nVersion: `${{ steps.get_tag.outputs.tag }}`\nMissing platforms: ${{ steps.validate_platforms.outputs.missing_platforms }}\n\n⚠️ *Auto-rollback will be initiated*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
-
       - name: Trigger auto-rollback
-        if: failure() && steps.validate_platforms.outputs.validation_failed == 'true'
+        if: steps.validate_binaries.outputs.binaries_ok != 'true'
         run: |
           TAG="${{ steps.get_tag.outputs.tag }}"
-          
           PREVIOUS_TAG=$(git tag -l "v*" | sort -V | grep -B1 "^${TAG}$" | head -n1)
           
           if [ -z "$PREVIOUS_TAG" ] || [ "$PREVIOUS_TAG" == "$TAG" ]; then
@@ -257,11 +245,9 @@ jobs:
             exit 1
           fi
           
-          echo "Triggering rollback from $TAG to $PREVIOUS_TAG"
-          
           gh workflow run rollback.yml \
             -f target_version="$PREVIOUS_TAG" \
-            -f reason="Auto-rollback: Release validation failed - missing platforms: ${{ steps.validate_platforms.outputs.missing_platforms }}" \
+            -f reason="Auto-rollback: Release validation failed - missing platforms: ${{ steps.validate_binaries.outputs.missing }}" \
             -f delete_bad_release=true
 
       - name: Summary
@@ -272,123 +258,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Release:** \`$TAG\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "${{ steps.validate_platforms.outputs.validation_failed }}" == "true" ]; then
-            echo "❌ **Status:** FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Missing Platforms:**" >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.validate_platforms.outputs.missing_platforms }}" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ Auto-rollback has been triggered" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "✅ **Status:** SUCCESS" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "All 9 platform binaries validated successfully" >> $GITHUB_STEP_SUMMARY
-          fi
-
-  publish-sdk:
-    name: Publish Node SDK
-    needs: validate
-    if: success()
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Get release tag
-        id: get_tag
-        run: |
-          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$TAG" ]; then
-            echo "No tag found, skipping SDK publishing"
-            exit 0
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "Publishing SDK for release: $TAG"
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Install dependencies
-        run: |
-          cd packages/node/iii
-          pnpm install
-
-      - name: Build SDK
-        run: |
-          cd packages/node/iii
-          pnpm build
-
-      - name: Publish to npm
-        id: publish
-        run: |
-          cd packages/node/iii
-          pnpm publish --access restricted --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Notify Slack - SDK Published
-        if: success()
-        uses: slackapi/slack-github-action@v2.0.0
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          payload: |
-            channel: ${{ secrets.SLACK_CHANNEL_ID }}
-            text: "📦 Node SDK published for release ${{ steps.get_tag.outputs.tag }}"
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "*Node SDK Published* 📦\n\nVersion: `${{ steps.get_tag.outputs.tag }}`\nPackage: `@iii-dev/sdk`\n\n✅ Published to npm registry"
-              - type: "context"
-                elements:
-                  - type: "mrkdwn"
-                    text: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
-
-      - name: Notify Slack - SDK Publishing Failed
-        if: failure()
-        uses: slackapi/slack-github-action@v2.0.0
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          payload: |
-            channel: ${{ secrets.SLACK_CHANNEL_ID }}
-            text: "⚠️ Node SDK publishing failed for release ${{ steps.get_tag.outputs.tag }}"
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "*SDK Publishing Failed* ⚠️\n\nVersion: `${{ steps.get_tag.outputs.tag }}`\nPackage: `@iii-dev/sdk`\n\n❌ Failed to publish to npm registry\n\n⚠️ Release binaries are available but SDK was not published"
-              - type: "context"
-                elements:
-                  - type: "mrkdwn"
-                    text: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
-
-      - name: Summary
-        if: always()
-        run: |
-          TAG="${{ steps.get_tag.outputs.tag }}"
-          echo "### Node SDK Publishing Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Release:** \`$TAG\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "${{ steps.publish.outcome }}" == "success" ]; then
-            echo "✅ **Status:** Published successfully" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Package \`@iii-dev/sdk@$TAG\` is now available on npm" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Status:** Publishing failed" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ Release binaries are available but SDK was not published" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "| Artifact | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust binaries | ${{ steps.validate_binaries.outputs.binaries_ok == 'true' && 'OK' || 'FAILED' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Node SDK (npm) | ${{ steps.validate_node.outputs.node_ok == 'true' && 'OK' || 'NOT FOUND' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python SDK (PyPI) | ${{ steps.validate_python.outputs.python_ok == 'true' && 'OK' || 'NOT FOUND' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust SDK (crates.io) | ${{ steps.validate_rust.outputs.rust_ok == 'true' && 'OK' || 'NOT FOUND' }} |" >> $GITHUB_STEP_SUMMARY

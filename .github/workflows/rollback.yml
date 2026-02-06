@@ -95,16 +95,22 @@ jobs:
             gh release delete "$CURRENT_TAG" --yes --cleanup-tag || echo "Release not found or already deleted"
           fi
 
-      - name: Update Cargo.toml to target version
+      - name: Update version files to target version
         run: |
           TARGET_VERSION="${{ github.event.inputs.target_version }}"
           VERSION_NUMBER="${TARGET_VERSION#v}"
           
-          sed -i.bak "s/^version = \".*\"/version = \"$VERSION_NUMBER\"/" Cargo.toml
-          rm Cargo.toml.bak
+          sed -i.bak "s/^version = \".*\"/version = \"$VERSION_NUMBER\"/" packages/rust/iii/Cargo.toml
+          rm packages/rust/iii/Cargo.toml.bak
+          echo "Updated Cargo.toml to $VERSION_NUMBER"
           
-          echo "Updated Cargo.toml to version $VERSION_NUMBER"
-          git diff Cargo.toml
+          sed -i.bak "s/\"version\": \".*\"/\"version\": \"$VERSION_NUMBER\"/" packages/node/iii/package.json
+          rm packages/node/iii/package.json.bak
+          echo "Updated package.json to $VERSION_NUMBER"
+          
+          sed -i.bak "s/^version = \".*\"/version = \"$VERSION_NUMBER\"/" packages/python/iii/pyproject.toml
+          rm packages/python/iii/pyproject.toml.bak
+          echo "Updated pyproject.toml to $VERSION_NUMBER"
 
       - name: Commit rollback
         run: |
@@ -112,7 +118,7 @@ jobs:
           
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml
+          git add packages/rust/iii/Cargo.toml packages/node/iii/package.json packages/python/iii/pyproject.toml
           git commit -m "chore: rollback to $TARGET_VERSION - ${{ github.event.inputs.reason }}"
           git push origin main
 

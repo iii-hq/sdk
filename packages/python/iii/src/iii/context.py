@@ -1,7 +1,7 @@
 """Context management for the III SDK."""
 
 from contextvars import ContextVar
-from typing import Any, Awaitable, Callable, TypeVar
+from typing import Awaitable, Callable, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 

@@ -6,7 +6,7 @@ import logging
 import os
 import platform
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from importlib.metadata import version
 from typing import Any, Awaitable, Callable
 

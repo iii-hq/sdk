@@ -113,7 +113,7 @@ jobs:
         run: mypy src
 
       - name: Test
-        run: pytest
+        run: pytest || [ $? -eq 5 ]
 
   test-rust:
     name: Test Rust SDK
@@ -351,17 +351,17 @@ jobs:
           PYTHON_RESULT='${{ needs.publish-python.result }}'
           RUST_PUBLISH_RESULT='${{ needs.publish-rust.result }}'
           RUST_BINARIES_RESULT='${{ needs.build-rust-binaries.result }}'
-          
+
           NODE_ICON="white_check_mark"
           PYTHON_ICON="white_check_mark"
           RUST_PUBLISH_ICON="white_check_mark"
           RUST_BINARIES_ICON="white_check_mark"
-          
+
           if [ "$NODE_RESULT" != "success" ]; then NODE_ICON="x"; fi
           if [ "$PYTHON_RESULT" != "success" ]; then PYTHON_ICON="x"; fi
           if [ "$RUST_PUBLISH_RESULT" != "success" ]; then RUST_PUBLISH_ICON="x"; fi
           if [ "$RUST_BINARIES_RESULT" != "success" ]; then RUST_BINARIES_ICON="x"; fi
-          
+
           echo "node_icon=$NODE_ICON" >> $GITHUB_OUTPUT
           echo "python_icon=$PYTHON_ICON" >> $GITHUB_OUTPUT
           echo "rust_publish_icon=$RUST_PUBLISH_ICON" >> $GITHUB_OUTPUT

@@ -9,7 +9,13 @@ const DELAY_MS = 100
 export const engineWsUrl = ENGINE_WS_URL
 export const engineHttpUrl = ENGINE_HTTP_URL
 
-export const iii = init(engineWsUrl)
+export const iii = init(engineWsUrl, {
+  reconnectionConfig: {
+    maxRetries: 3,
+    initialDelayMs: 100,
+    maxDelayMs: 1000,
+  },
+})
 
 export async function httpRequest(
   method: string,

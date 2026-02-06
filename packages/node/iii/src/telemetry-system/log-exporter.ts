@@ -3,10 +3,10 @@
  */
 
 import { ExportResultCode, type ExportResult } from '@opentelemetry/core'
-import { type LogRecordExporter, type ReadableLogRecord } from '@opentelemetry/sdk-logs'
+import type { LogRecordExporter, ReadableLogRecord } from '@opentelemetry/sdk-logs'
 import { JsonLogsSerializer } from '@opentelemetry/otlp-transformer'
 
-import { SharedEngineConnection } from './connection'
+import type { SharedEngineConnection } from './connection'
 import { PREFIX_LOGS } from './types'
 
 /**
@@ -14,7 +14,10 @@ import { PREFIX_LOGS } from './types'
  */
 export class EngineLogExporter implements LogRecordExporter {
   private connection: SharedEngineConnection
-  private pendingExports: Array<{ logs: ReadableLogRecord[]; callback: (result: ExportResult) => void }> = []
+  private pendingExports: Array<{
+    logs: ReadableLogRecord[]
+    callback: (result: ExportResult) => void
+  }> = []
 
   constructor(connection: SharedEngineConnection) {
     this.connection = connection
@@ -28,7 +31,10 @@ export class EngineLogExporter implements LogRecordExporter {
     }
   }
 
-  private doExport(logs: ReadableLogRecord[], resultCallback: (result: ExportResult) => void): void {
+  private doExport(
+    logs: ReadableLogRecord[],
+    resultCallback: (result: ExportResult) => void,
+  ): void {
     if (this.connection.getState() !== 'connected') {
       this.pendingExports.push({ logs, callback: resultCallback })
       return
@@ -41,7 +47,7 @@ export class EngineLogExporter implements LogRecordExporter {
         return
       }
 
-      this.connection.send(PREFIX_LOGS, serialized, (err) => {
+      this.connection.send(PREFIX_LOGS, serialized, err => {
         if (err) {
           console.error('[OTel] Failed to send logs:', err.message)
           resultCallback({ code: ExportResultCode.FAILED, error: err })

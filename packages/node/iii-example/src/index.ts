@@ -2,17 +2,22 @@ import { useApi, useFunctionsAvailable, useOnLog } from './hooks'
 import { state } from './state'
 import { streams } from './streams'
 
-useFunctionsAvailable((functions) => {
+useFunctionsAvailable(functions => {
   console.log('--------------------------------')
   console.log('Functions available:', functions.length)
   console.log('--------------------------------')
 })
 
-useOnLog(async (log) => {
+useOnLog(async log => {
   console.log('[OTEL Log]', log)
 })
 useApi(
-  { api_path: 'todo', http_method: 'POST', description: 'Create a new todo', metadata: { tags: ['todo'] } },
+  {
+    api_path: 'todo',
+    http_method: 'POST',
+    description: 'Create a new todo',
+    metadata: { tags: ['todo'] },
+  },
   async (req, ctx) => {
     ctx.logger.info('Creating new todo', { body: req.body })
 
@@ -57,7 +62,11 @@ useApi(
 
     ctx.logger.info('Todo deleted successfully', { todoId })
 
-    return { status_code: 200, body: { success: true }, headers: { 'Content-Type': 'application/json' } }
+    return {
+      status_code: 200,
+      body: { success: true },
+      headers: { 'Content-Type': 'application/json' },
+    }
   },
 )
 
@@ -87,33 +96,39 @@ useApi(
   },
 )
 
-useApi({ api_path: 'state', http_method: 'POST', description: 'Set application state' }, async (req, ctx) => {
-  ctx.logger.info('Creating new todo', { body: req.body })
+useApi(
+  { api_path: 'state', http_method: 'POST', description: 'Set application state' },
+  async (req, ctx) => {
+    ctx.logger.info('Creating new todo', { body: req.body })
 
-  const { description, dueDate } = req.body
-  const todoId = `todo-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+    const { description, dueDate } = req.body
+    const todoId = `todo-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 
-  if (!description) {
-    return { status_code: 400, body: { error: 'Description is required' } }
-  }
+    if (!description) {
+      return { status_code: 400, body: { error: 'Description is required' } }
+    }
 
-  const newTodo = {
-    id: todoId,
-    description,
-    createdAt: new Date().toISOString(),
-    dueDate: dueDate,
-    completedAt: undefined,
-  }
-  const todo = await state.set('todo', todoId, newTodo)
+    const newTodo = {
+      id: todoId,
+      description,
+      createdAt: new Date().toISOString(),
+      dueDate: dueDate,
+      completedAt: undefined,
+    }
+    const todo = await state.set('todo', todoId, newTodo)
 
-  return { status_code: 201, body: todo, headers: { 'Content-Type': 'application/json' } }
-})
+    return { status_code: 201, body: todo, headers: { 'Content-Type': 'application/json' } }
+  },
+)
 
-useApi({ api_path: 'state/:id', http_method: 'GET', description: 'Get state by ID' }, async (req, ctx) => {
-  ctx.logger.info('Getting todo', { ...req.path_params })
+useApi(
+  { api_path: 'state/:id', http_method: 'GET', description: 'Get state by ID' },
+  async (req, ctx) => {
+    ctx.logger.info('Getting todo', { ...req.path_params })
 
-  const todoId = req.path_params.id
-  const todo = await state.get('todo', todoId)
+    const todoId = req.path_params.id
+    const todo = await state.get('todo', todoId)
 
-  return { status_code: 200, body: todo, headers: { 'Content-Type': 'application/json' } }
-})
+    return { status_code: 200, body: todo, headers: { 'Content-Type': 'application/json' } }
+  },
+)

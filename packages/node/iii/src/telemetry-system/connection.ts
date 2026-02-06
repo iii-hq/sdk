@@ -3,11 +3,7 @@
  */
 
 import { WebSocket } from 'ws'
-import {
-  type ConnectionState,
-  type ReconnectionConfig,
-  DEFAULT_RECONNECTION_CONFIG,
-} from './types'
+import { type ConnectionState, type ReconnectionConfig, DEFAULT_RECONNECTION_CONFIG } from './types'
 
 /**
  * Shared WebSocket connection for all OTEL exporters (traces, metrics, logs).
@@ -63,7 +59,7 @@ export class SharedEngineConnection {
         // Flush pending messages
         const pending = this.pendingMessages.splice(0, this.pendingMessages.length)
         for (const { frame, callback } of pending) {
-          this.ws?.send(frame, (err) => callback?.(err))
+          this.ws?.send(frame, err => callback?.(err))
         }
 
         // Notify callbacks
@@ -75,27 +71,27 @@ export class SharedEngineConnection {
       this.ws.on('close', () => {
         this.connecting = false
         this.ws = null
-        
+
         // Skip reconnection if we're shutting down intentionally
         if (this.shuttingDown) {
           this.state = 'disconnected'
           console.log('[OTel] Connection closed during shutdown')
           return
         }
-        
+
         this.state = 'disconnected'
         console.log('[OTel] Disconnected from engine, will reconnect...')
         this.scheduleReconnect()
       })
 
-      this.ws.on('error', (err) => {
+      this.ws.on('error', err => {
         this.connecting = false
-        
+
         // Skip error handling if we're shutting down intentionally
         if (this.shuttingDown) {
           return
         }
-        
+
         console.error('[OTel] WebSocket error:', err.message)
       })
     } catch (err) {
@@ -123,7 +119,8 @@ export class SharedEngineConnection {
       return // Already scheduled
     }
 
-    const exponentialDelay = this.config.initialDelayMs * Math.pow(this.config.backoffMultiplier, this.reconnectAttempt)
+    const exponentialDelay =
+      this.config.initialDelayMs * this.config.backoffMultiplier ** this.reconnectAttempt
     const cappedDelay = Math.min(exponentialDelay, this.config.maxDelayMs)
     const jitter = cappedDelay * this.config.jitterFactor * (2 * Math.random() - 1)
     const delay = Math.max(0, Math.floor(cappedDelay + jitter))
@@ -182,7 +179,7 @@ export class SharedEngineConnection {
   async shutdown(): Promise<void> {
     // Set shutdown flag to prevent reconnection attempts
     this.shuttingDown = true
-    
+
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout)
       this.reconnectTimeout = null

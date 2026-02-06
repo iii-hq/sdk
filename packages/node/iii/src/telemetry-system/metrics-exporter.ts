@@ -3,10 +3,10 @@
  */
 
 import { ExportResultCode, type ExportResult } from '@opentelemetry/core'
-import { type PushMetricExporter, type ResourceMetrics } from '@opentelemetry/sdk-metrics'
+import type { PushMetricExporter, ResourceMetrics } from '@opentelemetry/sdk-metrics'
 import { JsonMetricsSerializer } from '@opentelemetry/otlp-transformer'
 
-import { SharedEngineConnection } from './connection'
+import type { SharedEngineConnection } from './connection'
 import { PREFIX_METRICS } from './types'
 
 /**
@@ -15,7 +15,10 @@ import { PREFIX_METRICS } from './types'
 export class EngineMetricsExporter implements PushMetricExporter {
   private static readonly MAX_PENDING_EXPORTS = 100
   private connection: SharedEngineConnection
-  private pendingExports: Array<{ metrics: ResourceMetrics; resultCallback?: (result: ExportResult) => void }> = []
+  private pendingExports: Array<{
+    metrics: ResourceMetrics
+    resultCallback?: (result: ExportResult) => void
+  }> = []
 
   constructor(connection: SharedEngineConnection) {
     this.connection = connection
@@ -29,7 +32,10 @@ export class EngineMetricsExporter implements PushMetricExporter {
     }
   }
 
-  private sendExport(metricsData: ResourceMetrics, resultCallback?: (result: ExportResult) => void): void {
+  private sendExport(
+    metricsData: ResourceMetrics,
+    resultCallback?: (result: ExportResult) => void,
+  ): void {
     try {
       const serialized = JsonMetricsSerializer.serializeRequest(metricsData)
       if (!serialized) {
@@ -37,7 +43,7 @@ export class EngineMetricsExporter implements PushMetricExporter {
         return
       }
 
-      this.connection.send(PREFIX_METRICS, serialized, (err) => {
+      this.connection.send(PREFIX_METRICS, serialized, err => {
         if (err) {
           console.error('[OTel] Failed to send metrics:', err.message)
           resultCallback?.({ code: ExportResultCode.FAILED, error: err })
@@ -51,11 +57,17 @@ export class EngineMetricsExporter implements PushMetricExporter {
     }
   }
 
-  private doExport(metricsData: ResourceMetrics, resultCallback: (result: ExportResult) => void): void {
+  private doExport(
+    metricsData: ResourceMetrics,
+    resultCallback: (result: ExportResult) => void,
+  ): void {
     if (this.connection.getState() !== 'connected') {
       if (this.pendingExports.length >= EngineMetricsExporter.MAX_PENDING_EXPORTS) {
         const dropped = this.pendingExports.shift()
-        dropped?.resultCallback?.({ code: ExportResultCode.FAILED, error: new Error('Queue overflow') })
+        dropped?.resultCallback?.({
+          code: ExportResultCode.FAILED,
+          error: new Error('Queue overflow'),
+        })
         console.warn('[OTel] Metrics export queue full, dropped oldest entry')
       }
       this.pendingExports.push({ metrics: metricsData, resultCallback })

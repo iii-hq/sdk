@@ -4,8 +4,8 @@ import {
   type Context,
   type FunctionMessage,
   getContext,
-  LogCallback,
-  LogConfig,
+  type LogCallback,
+  type LogConfig,
 } from '@iii-dev/sdk'
 import { iii } from './iii'
 

@@ -30,6 +30,7 @@ flowchart TD
 
   Release --> PublishNode[npm publish]
   Release --> PublishPython[PyPI publish]
+  Release --> PublishRust[crates.io publish]
   Release --> BuildRust[Rust binary builds]
   Release --> GitHubRelease[GitHub Release]
 ```
@@ -57,7 +58,7 @@ Manual workflows for publishing pre-release versions (alpha, beta, rc):
 
 - **[`prerelease-node-sdk.yml`](workflows/prerelease-node-sdk.yml)** - Publish Node.js SDK pre-release to npm
 - **[`prerelease-python-sdk.yml`](workflows/prerelease-python-sdk.yml)** - Publish Python SDK pre-release to PyPI
-- **[`prerelease-rust-sdk.yml`](workflows/prerelease-rust-sdk.yml)** - Publish Rust SDK pre-release
+- **[`prerelease-rust-sdk.yml`](workflows/prerelease-rust-sdk.yml)** - Publish Rust SDK pre-release to crates.io
 
 **How to trigger:** Go to Actions → Select workflow → Run workflow → Provide inputs:
 - Pre-release label (e.g., `alpha`, `beta`, `rc`)
@@ -73,14 +74,14 @@ Manual workflows for publishing pre-release versions (alpha, beta, rc):
 - **[`release.yml`](workflows/release.yml)** - Full release process
   - **Trigger:** Automatically on push of `v*` tags
   - Runs tests for all languages
-  - Publishes to npm, PyPI
+  - Publishes to npm, PyPI, and crates.io
   - Builds Rust binaries for multiple platforms
   - Creates GitHub Release
   - Sends Slack notifications
 
 - **[`validate-release.yml`](workflows/validate-release.yml)** - Validate release artifacts
   - **Trigger:** Automatically after release completes
-  - Verifies published packages and binaries
+  - Verifies published packages (npm, PyPI, crates.io) and binaries
 
 - **[`rollback.yml`](workflows/rollback.yml)** - Rollback to a previous version
   - **Trigger:** Manual dispatch

@@ -438,11 +438,7 @@ impl III {
         }
     }
 
-    pub fn call_void<TInput>(
-        &self,
-        function_id: &str,
-        data: TInput,
-    ) -> Result<(), IIIError>
+    pub fn call_void<TInput>(&self, function_id: &str, data: TInput) -> Result<(), IIIError>
     where
         TInput: Serialize,
     {

@@ -214,7 +214,7 @@ impl III {
         Ok(())
     }
 
-    pub fn disconnect(&self) {
+    pub fn shutdown(&self) {
         self.inner.running.store(false, Ordering::SeqCst);
         let _ = self.inner.outbound.send(Outbound::Shutdown);
     }
@@ -272,7 +272,7 @@ impl III {
 
             Box::pin(async move {
                 let invoker: LoggerInvoker = Arc::new(move |path, params| {
-                    let _ = iii.invoke_function_async(path, params);
+                    let _ = iii.call_void(path, params);
                 });
 
                 let logger = Logger::new(
@@ -401,17 +401,17 @@ impl III {
         Ok(Trigger::new(unregister_fn))
     }
 
-    pub async fn invoke_function(
+    pub async fn call(
         &self,
         function_id: &str,
         data: impl serde::Serialize,
     ) -> Result<Value, IIIError> {
         let value = serde_json::to_value(data)?;
-        self.invoke_function_with_timeout(function_id, value, DEFAULT_TIMEOUT)
+        self.call_with_timeout(function_id, value, DEFAULT_TIMEOUT)
             .await
     }
 
-    pub async fn invoke_function_with_timeout(
+    pub async fn call_with_timeout(
         &self,
         function_id: &str,
         data: Value,
@@ -438,7 +438,7 @@ impl III {
         }
     }
 
-    pub fn invoke_function_async<TInput>(
+    pub fn call_void<TInput>(
         &self,
         function_id: &str,
         data: TInput,
@@ -457,7 +457,7 @@ impl III {
     /// List all registered functions from the engine
     pub async fn list_functions(&self) -> Result<Vec<FunctionInfo>, IIIError> {
         let result = self
-            .invoke_function("engine.functions.list", serde_json::json!({}))
+            .call("engine.functions.list", serde_json::json!({}))
             .await?;
 
         let functions = result
@@ -554,7 +554,7 @@ impl III {
     /// List all connected workers from the engine
     pub async fn list_workers(&self) -> Result<Vec<WorkerInfo>, IIIError> {
         let result = self
-            .invoke_function("engine.workers.list", serde_json::json!({}))
+            .call("engine.workers.list", serde_json::json!({}))
             .await?;
 
         let workers = result
@@ -568,7 +568,7 @@ impl III {
     /// List all registered triggers from the engine
     pub async fn list_triggers(&self) -> Result<Vec<TriggerInfo>, IIIError> {
         let result = self
-            .invoke_function("engine.triggers.list", serde_json::json!({}))
+            .call("engine.triggers.list", serde_json::json!({}))
             .await?;
 
         let triggers = result
@@ -582,7 +582,7 @@ impl III {
     /// Register this worker's metadata with the engine (called automatically on connect)
     fn register_worker_metadata(&self) {
         if let Some(metadata) = self.inner.worker_metadata.lock().unwrap().clone() {
-            let _ = self.invoke_function_async("engine.workers.register", metadata);
+            let _ = self.call_void("engine.workers.register", metadata);
         }
     }
 
@@ -963,7 +963,7 @@ mod tests {
     async fn invoke_function_times_out_and_clears_pending() {
         let iii = III::new("ws://localhost:1234");
         let result = iii
-            .invoke_function_with_timeout(
+            .call_with_timeout(
                 "functions.echo",
                 json!({ "a": 1 }),
                 Duration::from_millis(10),

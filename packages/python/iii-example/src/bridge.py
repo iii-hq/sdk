@@ -1,7 +1,7 @@
 import os
 
-from iii import Bridge, BridgeOptions
+from iii import III, InitOptions
 
 engine_ws_url = os.environ.get("III_BRIDGE_URL", "ws://localhost:49134")
 
-bridge = Bridge(address=engine_ws_url, options=BridgeOptions(worker_name="iii-example"))
+bridge = III(address=engine_ws_url, options=InitOptions(worker_name="iii-example"))

@@ -72,8 +72,8 @@ RegisterTriggerTypeInput = RegisterTriggerTypeMessage
 FunctionsAvailableCallback = Callable[[list[FunctionInfo]], None]
 
 
-class BridgeClient(Protocol):
-    """Protocol for bridge client implementations."""
+class IIIClient(Protocol):
+    """Protocol for III client implementations."""
 
     def register_trigger(self, trigger: RegisterTriggerMessage) -> Trigger: ...
 
@@ -86,9 +86,9 @@ class BridgeClient(Protocol):
         description: str | None = None,
     ) -> None: ...
 
-    async def invoke_function(self, function_id: str, data: Any) -> Any: ...
+    async def call(self, function_id: str, data: Any) -> Any: ...
 
-    def invoke_function_async(self, function_id: str, data: Any) -> None: ...
+    def call_void(self, function_id: str, data: Any) -> None: ...
 
     def register_trigger_type(
         self,

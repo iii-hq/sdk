@@ -1,4 +1,4 @@
-"""Bridge implementation for WebSocket communication with the III Engine."""
+"""III SDK implementation for WebSocket communication with the III Engine."""
 
 import asyncio
 import json
@@ -38,18 +38,18 @@ log = logging.getLogger("iii.bridge")
 
 
 @dataclass
-class BridgeOptions:
-    """Options for configuring the Bridge."""
+class InitOptions:
+    """Options for configuring the III SDK."""
 
     worker_name: str | None = None
 
 
-class Bridge:
+class III:
     """WebSocket bridge for communication with the III Engine."""
 
-    def __init__(self, address: str, options: BridgeOptions | None = None) -> None:
+    def __init__(self, address: str, options: InitOptions | None = None) -> None:
         self._address = address
-        self._options = options or BridgeOptions()
+        self._options = options or InitOptions()
         self._ws: ClientConnection | None = None
         self._functions: dict[str, RemoteFunctionData] = {}
         self._services: dict[str, RegisterServiceMessage] = {}
@@ -71,7 +71,7 @@ class Bridge:
         self._running = True
         await self._do_connect()
 
-    async def disconnect(self) -> None:
+    async def shutdown(self) -> None:
         """Disconnect from the WebSocket server."""
         self._running = False
 
@@ -295,7 +295,7 @@ class Bridge:
         async def wrapped(input_data: Any) -> Any:
             trace_id = str(uuid.uuid4())
             logger = Logger(
-                lambda fn, params: self.invoke_function_async(fn, params),
+                lambda fn, params: self.call_void(fn, params),
                 trace_id,
                 path,
             )
@@ -318,7 +318,7 @@ class Bridge:
         self._enqueue(msg)
         self._services[id] = msg
 
-    async def invoke_function(self, path: str, data: Any, timeout: float = 30.0) -> Any:
+    async def call(self, path: str, data: Any, timeout: float = 30.0) -> Any:
         """Invoke a remote function and wait for the result."""
         invocation_id = str(uuid.uuid4())
         future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
@@ -339,7 +339,7 @@ class Bridge:
             self._pending.pop(invocation_id, None)
             raise TimeoutError(f"Invocation of '{path}' timed out after {timeout}s")
 
-    def invoke_function_async(self, path: str, data: Any) -> None:
+    def call_void(self, path: str, data: Any) -> None:
         """Fire-and-forget invocation (no response expected)."""
         msg = InvokeFunctionMessage(function_id=path, data=data)
         try:
@@ -349,13 +349,13 @@ class Bridge:
 
     async def list_functions(self) -> list[FunctionInfo]:
         """List all registered functions from the engine."""
-        result = await self.invoke_function("engine.functions.list", {})
+        result = await self.call("engine.functions.list", {})
         functions_data = result.get("functions", [])
         return [FunctionInfo(**f) for f in functions_data]
 
     async def list_workers(self) -> list[WorkerInfo]:
         """List all connected workers from the engine."""
-        result = await self.invoke_function("engine.workers.list", {})
+        result = await self.call("engine.workers.list", {})
         workers_data = result.get("workers", [])
         return [WorkerInfo(**w) for w in workers_data]
 
@@ -377,7 +377,7 @@ class Bridge:
 
     def _register_worker_metadata(self) -> None:
         """Register this worker's metadata with the engine."""
-        self.invoke_function_async("engine.workers.register", self._get_worker_metadata())
+        self.call_void("engine.workers.register", self._get_worker_metadata())
 
     def on_functions_available(self, callback: Callable[[list[FunctionInfo]], None]) -> Callable[[], None]:
         """Subscribe to function availability events.
@@ -443,7 +443,7 @@ class Bridge:
         - {stream_name}.get
         - {stream_name}.set
         - {stream_name}.delete
-        - {stream_name}.getGroup
+        - {stream_name}.list
         - {stream_name}.listGroups
         - {stream_name}.update
 
@@ -467,10 +467,10 @@ class Bridge:
             input_data = StreamDeleteInput(**data) if isinstance(data, dict) else data
             await stream.delete(input_data)
 
-        async def get_group_handler(data: Any) -> list[Any]:
-            from .streams import StreamGetGroupInput
-            input_data = StreamGetGroupInput(**data) if isinstance(data, dict) else data
-            return await stream.get_group(input_data)
+        async def list_handler(data: Any) -> list[Any]:
+            from .streams import StreamListInput
+            input_data = StreamListInput(**data) if isinstance(data, dict) else data
+            return await stream.list(input_data)
 
         async def list_groups_handler(data: Any) -> list[str]:
             from .streams import StreamListGroupsInput
@@ -486,6 +486,6 @@ class Bridge:
         self.register_function(f"{stream_name}.get", get_handler)
         self.register_function(f"{stream_name}.set", set_handler)
         self.register_function(f"{stream_name}.delete", delete_handler)
-        self.register_function(f"{stream_name}.getGroup", get_group_handler)
+        self.register_function(f"{stream_name}.list", list_handler)
         self.register_function(f"{stream_name}.listGroups", list_groups_handler)
         self.register_function(f"{stream_name}.update", update_handler)

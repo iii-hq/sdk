@@ -61,3 +61,9 @@ class Logger:
         if self._invoker:
             self._invoker("logger.error", self._build_params(message, data))
         log.error(f"[{self._function_name}] {message}", extra={"data": data})
+
+    def debug(self, message: str, data: Any = None) -> None:
+        """Log a debug message."""
+        if self._invoker:
+            self._invoker("logger.debug", self._build_params(message, data))
+        log.debug(f"[{self._function_name}] {message}", extra={"data": data})

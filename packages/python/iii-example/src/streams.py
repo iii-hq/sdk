@@ -3,7 +3,7 @@ from typing import Any
 from iii import (
     IStream,
     StreamDeleteInput,
-    StreamGetGroupInput,
+    StreamListInput,
     StreamGetInput,
     StreamListGroupsInput,
     StreamSetInput,
@@ -17,27 +17,27 @@ from .models import Todo
 
 class StreamClient:
     async def get(self, stream_name: str, group_id: str, item_id: str) -> Any | None:
-        return await bridge.invoke_function(
+        return await bridge.call(
             "streams.get", {"stream_name": stream_name, "group_id": group_id, "item_id": item_id}
         )
 
     async def set(self, stream_name: str, group_id: str, item_id: str, data: Any) -> Any:
-        return await bridge.invoke_function(
+        return await bridge.call(
             "streams.set", {"stream_name": stream_name, "group_id": group_id, "item_id": item_id, "data": data}
         )
 
     async def delete(self, stream_name: str, group_id: str, item_id: str) -> None:
-        return await bridge.invoke_function(
+        return await bridge.call(
             "streams.delete", {"stream_name": stream_name, "group_id": group_id, "item_id": item_id}
         )
 
     async def get_group(self, stream_name: str, group_id: str) -> list[Any]:
-        return await bridge.invoke_function(
-            "streams.getGroup", {"stream_name": stream_name, "group_id": group_id}
+        return await bridge.call(
+            "streams.list", {"stream_name": stream_name, "group_id": group_id}
         )
 
     async def list_groups(self, stream_name: str) -> list[str]:
-        return await bridge.invoke_function("streams.listGroups", {"stream_name": stream_name})
+        return await bridge.call("streams.listGroups", {"stream_name": stream_name})
 
 
 class TodoStream(IStream[dict[str, Any]]):
@@ -70,7 +70,7 @@ class TodoStream(IStream[dict[str, Any]]):
     async def delete(self, input: StreamDeleteInput) -> None:
         self._todos = [t for t in self._todos if t.id != input.item_id]
 
-    async def get_group(self, input: StreamGetGroupInput) -> list[dict[str, Any]]:
+    async def list(self, input: StreamListInput) -> list[dict[str, Any]]:
         return [t.model_dump() for t in self._todos if t.group_id == input.group_id]
 
     async def list_groups(self, input: StreamListGroupsInput) -> list[str]:

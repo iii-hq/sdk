@@ -64,8 +64,8 @@ class StreamDeleteInput(BaseModel):
     item_id: str
 
 
-class StreamGetGroupInput(BaseModel):
-    """Input for stream get group operation."""
+class StreamListInput(BaseModel):
+    """Input for stream list operation."""
 
     stream_name: str
     group_id: str
@@ -154,7 +154,7 @@ class IStream(ABC, Generic[TData]):
         ...
 
     @abstractmethod
-    async def get_group(self, input: StreamGetGroupInput) -> list[TData]:
+    async def list(self, input: StreamListInput) -> list[TData]:
         """Get all items in a group."""
         ...
 

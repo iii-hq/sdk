@@ -11,18 +11,18 @@ pip install iii-sdk
 ## Usage
 
 ```python
-from iii import Bridge, Logger
+from iii import III, Logger
 
-# Create a bridge connection
-bridge = Bridge("ws://localhost:8080")
+# Create an III SDK instance
+iii = III("ws://localhost:8080")
 
 # Register a function
-@bridge.function("my.function")
+@iii.function("my.function")
 async def my_function(data):
     return {"result": "success"}
 
 # Invoke a function
-result = await bridge.invoke_function("other.function", {"param": "value"})
+result = await iii.call("other.function", {"param": "value"})
 ```
 
 ### Build & Publish

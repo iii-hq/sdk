@@ -2,7 +2,7 @@
 
 import logging
 
-from .bridge import Bridge, BridgeOptions
+from .bridge import III, InitOptions
 from .bridge_types import FunctionInfo, WorkerInfo, WorkerStatus
 from .context import Context, get_context, with_context
 from .logger import Logger
@@ -11,7 +11,7 @@ from .streams import (
     StreamAuthInput,
     StreamAuthResult,
     StreamDeleteInput,
-    StreamGetGroupInput,
+    StreamListInput,
     StreamGetInput,
     StreamJoinLeaveEvent,
     StreamJoinResult,
@@ -45,8 +45,8 @@ def configure_logging(level: int = logging.INFO, format: str | None = None) -> N
 
 __all__ = [
     # Core
-    "Bridge",
-    "BridgeOptions",
+    "III",
+    "InitOptions",
     "Logger",
     "Context",
     "get_context",
@@ -54,7 +54,7 @@ __all__ = [
     # API types
     "ApiRequest",
     "ApiResponse",
-    # Bridge types
+    # SDK types
     "FunctionInfo",
     "WorkerInfo",
     "WorkerStatus",
@@ -63,7 +63,7 @@ __all__ = [
     "StreamAuthInput",
     "StreamAuthResult",
     "StreamDeleteInput",
-    "StreamGetGroupInput",
+    "StreamListInput",
     "StreamGetInput",
     "StreamJoinLeaveEvent",
     "StreamJoinResult",

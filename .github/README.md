@@ -97,7 +97,7 @@ Reusable composite actions for setting up the III Engine in CI workflows:
 Downloads, caches, and starts the III Engine server for integration tests.
 
 **Inputs:**
-- `engine-repo` (optional): GitHub repository containing III Engine releases (default: `{owner}/iii-engine`)
+- `engine-repo` (optional): GitHub repository containing III Engine releases (default: `{owner}/iii`)
 - `engine-version` (optional): Engine version to download (default: `latest`)
 - `config-path` (optional): Path to engine config YAML (default: `.github/engine-config/test-config.yml`)
 - `github-token` (required): GitHub token for API access

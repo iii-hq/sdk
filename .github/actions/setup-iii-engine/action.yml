@@ -30,7 +30,7 @@ runs:
       id: resolve
       shell: bash
       run: |
-        ENGINE_REPO="${INPUT_ENGINE_REPO:-${{ github.repository_owner }}/iii-engine}"
+        ENGINE_REPO="${INPUT_ENGINE_REPO:-${{ github.repository_owner }}/iii}"
         ENGINE_VERSION="${INPUT_ENGINE_VERSION:-latest}"
         PLATFORM="x86_64-unknown-linux-gnu"
 

@@ -140,18 +140,29 @@ runs:
           echo "Config file not found at $CONFIG_PATH, using default config"
         fi
 
-        /tmp/iii-engine/iii --config config.yml &
-        echo $! > /tmp/iii-engine.pid
-        sleep 2
-        echo "III Engine started with PID $(cat /tmp/iii-engine.pid)"
+        echo "Starting III Engine..."
+        /tmp/iii-engine/iii --config config.yml > /tmp/iii-engine.log 2>&1 &
+        ENGINE_PID=$!
+        echo $ENGINE_PID > /tmp/iii-engine.pid
+        
+        sleep 3
+        
+        if ps -p $ENGINE_PID > /dev/null 2>&1; then
+          echo "III Engine started with PID $ENGINE_PID"
+        else
+          echo "Failed to start III Engine. Last 20 lines of log:"
+          tail -n 20 /tmp/iii-engine.log || echo "No log file found"
+          exit 1
+        fi
 
     - name: Wait for engine health check
       id: healthcheck
       if: steps.setup.outputs.engine_available == 'true'
       shell: bash
       run: |
+        echo "Waiting for engine to be ready at http://localhost:3111"
         for i in {1..30}; do
-          if curl -f http://localhost:3111/health 2>/dev/null || curl -f http://localhost:3111/ 2>/dev/null; then
+          if curl -s http://localhost:3111/ >/dev/null 2>&1; then
             echo "Engine is ready!"
             echo "engine_available=true" >> $GITHUB_OUTPUT
             exit 0
@@ -160,6 +171,15 @@ runs:
           sleep 2
         done
         echo "Engine did not become ready in time"
+        echo "Checking if process is still running..."
+        if [ -f /tmp/iii-engine.pid ]; then
+          PID=$(cat /tmp/iii-engine.pid)
+          if ps -p $PID > /dev/null 2>&1; then
+            echo "Engine process is running but not responding"
+          else
+            echo "Engine process has died"
+          fi
+        fi
         echo "engine_available=false" >> $GITHUB_OUTPUT
         exit 1
 

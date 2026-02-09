@@ -21,9 +21,11 @@ Basic example demonstrating the III SDK.
 
 ```bash
 cd iii-example
-pip install -e ../iii
-python src/main.py
+uv sync
+uv run python -m src.main
 ```
+
+Prerequisite: the worker expects a III engine at `III_BRIDGE_URL` (default `ws://localhost:49134`) and Redis for the stream/event modules configured in `iii-example/config.yaml`.
 
 ## Development
 

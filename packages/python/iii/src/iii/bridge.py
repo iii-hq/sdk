@@ -289,7 +289,7 @@ class III:
         return Trigger(unregister)
 
     def register_function(self, path: str, handler: RemoteFunctionHandler, description: str | None = None) -> None:
-        msg = RegisterFunctionMessage(function_id=path, description=description)
+        msg = RegisterFunctionMessage(id=path, description=description)
         self._enqueue(msg)
 
         async def wrapped(input_data: Any) -> Any:
@@ -396,6 +396,7 @@ class III:
 
             function_id = self._functions_available_function_id
             if function_id not in self._functions:
+
                 async def handler(data: dict[str, Any]) -> None:
                     functions_data = data.get("functions", [])
                     functions = [FunctionInfo(**f) for f in functions_data]
@@ -404,11 +405,7 @@ class III:
 
                 self.register_function(function_id, handler)
 
-            self._functions_available_trigger = self.register_trigger(
-                "engine::functions-available",
-                function_id,
-                {}
-            )
+            self._functions_available_trigger = self.register_trigger("engine::functions-available", function_id, {})
 
         def unsubscribe() -> None:
             self._functions_available_callbacks.discard(callback)
@@ -431,6 +428,7 @@ class III:
         Returns:
             An unsubscribe function (no-op).
         """
+
         def unsubscribe() -> None:
             pass
 

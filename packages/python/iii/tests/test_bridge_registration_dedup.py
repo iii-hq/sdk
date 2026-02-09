@@ -105,10 +105,7 @@ async def test_reconnect_replays_durable_state_once_per_connection(
         1 for ws in sockets for m in ws.sent if m.get("type") == "registerfunction" and m.get("id") == "demo.fn"
     )
     total_trigger = sum(
-        1
-        for ws in sockets
-        for m in ws.sent
-        if m.get("type") == "registertrigger" and m.get("function_id") == "demo.fn"
+        1 for ws in sockets for m in ws.sent if m.get("type") == "registertrigger" and m.get("function_id") == "demo.fn"
     )
 
     assert total_fn == 2

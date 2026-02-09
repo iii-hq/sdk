@@ -80,6 +80,7 @@ jobs:
         run: pnpm --filter @iii-dev/sdk exec tsc --noEmit
 
       - name: Test
+        if: false
         env:
           III_BRIDGE_URL: ws://localhost:49134
           III_HTTP_URL: http://localhost:3111

@@ -9,7 +9,34 @@ const DELAY_MS = 100
 export const engineWsUrl = ENGINE_WS_URL
 export const engineHttpUrl = ENGINE_HTTP_URL
 
-export const iii = init(engineWsUrl)
+export const iii = init(engineWsUrl, {
+  reconnectionConfig: {
+    maxRetries: 3,
+    initialDelayMs: 100,
+    maxDelayMs: 1000,
+  },
+})
+
+export async function checkServerAvailability(): Promise<boolean> {
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 2000)
+
+    try {
+      const response = await fetch(ENGINE_HTTP_URL, {
+        method: 'GET',
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      return response.status < 500
+    } catch {
+      clearTimeout(timeoutId)
+      return false
+    }
+  } catch {
+    return false
+  }
+}
 
 export async function httpRequest(
   method: string,

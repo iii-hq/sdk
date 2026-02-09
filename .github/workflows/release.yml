@@ -8,13 +8,17 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   notify-start:
     name: Initialize Slack Notification
     runs-on: ubuntu-latest
     outputs:
       slack_ts: ${{ steps.slack.outputs.ts }}
-    
+
     steps:
       - name: Post initial Slack message
         id: slack
@@ -24,12 +28,12 @@ jobs:
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
             channel: ${{ secrets.SLACK_CHANNEL_ID }}
-            text: "🚀 Release ${{ github.ref_name }} started"
+            text: "Release ${{ github.ref_name }} started"
             blocks:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Release ${{ github.ref_name }}* 🚀\n\n⏳ Running tests...\n⬜ Creating release...\n⬜ Building binaries (0/9)\n⬜ Validating release..."
+                  text: "*Release ${{ github.ref_name }}*\n\n:hourglass: Running tests...\n:white_square: Creating release...\n:white_square: Publishing SDKs...\n:white_square: Building binaries (0/9)"
               - type: "context"
                 elements:
                   - type: "mrkdwn"
@@ -48,10 +52,105 @@ jobs:
           path: slack-data/
           retention-days: 1
 
-  test:
-    name: Run Tests
-    needs: notify-start
+  test-node:
+    name: Test Node.js SDK
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/node
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup III Engine
+        id: engine
+        uses: ./.github/actions/setup-iii-engine
+        with:
+          engine-repo: ${{ vars.ENGINE_REPO || '' }}
+          engine-version: ${{ vars.ENGINE_VERSION || 'latest' }}
+          github-token: ${{ github.token }}
+
+      - name: Type check
+        run: pnpm --filter @iii-dev/sdk exec tsc --noEmit
+
+      - name: Test
+        env:
+          III_BRIDGE_URL: ws://localhost:49134
+          III_HTTP_URL: http://localhost:3111
+        run: pnpm --filter @iii-dev/sdk test
+
+      - name: Stop III Engine
+        if: always() && steps.engine.outputs.engine-available == 'true'
+        uses: ./.github/actions/stop-iii-engine
+
+      - name: Build
+        run: pnpm build
+
+  test-python:
+    name: Test Python SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/python/iii
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Setup III Engine
+        id: engine
+        uses: ./.github/actions/setup-iii-engine
+        with:
+          engine-repo: ${{ vars.ENGINE_REPO || '' }}
+          engine-version: ${{ vars.ENGINE_VERSION || 'latest' }}
+          github-token: ${{ github.token }}
+
+      - name: Lint
+        run: ruff check src
+
+      - name: Type check
+        run: mypy src
+
+      - name: Test
+        env:
+          III_BRIDGE_URL: ws://localhost:49134
+          III_HTTP_URL: http://localhost:3111
+        run: pytest || [ $? -eq 5 ]
+
+      - name: Stop III Engine
+        if: always() && steps.engine.outputs.engine-available == 'true'
+        uses: ./.github/actions/stop-iii-engine
+
+  test-rust:
+    name: Test Rust SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/rust/iii
 
     steps:
       - name: Checkout code
@@ -59,63 +158,39 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Cache cargo registry & build
         uses: Swatinem/rust-cache@v2
 
+      - name: Setup III Engine
+        id: engine
+        uses: ./.github/actions/setup-iii-engine
+        with:
+          engine-repo: ${{ vars.ENGINE_REPO || '' }}
+          engine-version: ${{ vars.ENGINE_VERSION || 'latest' }}
+          github-token: ${{ github.token }}
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
       - name: Run tests
+        env:
+          III_BRIDGE_URL: ws://localhost:49134
+          III_HTTP_URL: http://localhost:3111
         run: cargo test --all-features
 
-      - name: Download Slack data
-        if: always()
-        uses: actions/download-artifact@v4
-        with:
-          name: slack-notification-data
-          path: slack-data/
-
-      - name: Update Slack - Tests Complete
-        if: success()
-        uses: slackapi/slack-github-action@v2.0.0
-        with:
-          method: chat.update
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          payload: |
-            channel: ${{ secrets.SLACK_CHANNEL_ID }}
-            ts: ${{ needs.notify-start.outputs.slack_ts }}
-            text: "🚀 Release ${{ github.ref_name }} in progress"
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "*Release ${{ github.ref_name }}* 🚀\n\n✅ Tests passed\n⏳ Creating release...\n⬜ Building binaries (0/9)\n⬜ Validating release..."
-              - type: "context"
-                elements:
-                  - type: "mrkdwn"
-                    text: "Triggered by ${{ github.actor }} | <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
-
-      - name: Update Slack - Tests Failed
-        if: failure()
-        uses: slackapi/slack-github-action@v2.0.0
-        with:
-          method: chat.update
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          payload: |
-            channel: ${{ secrets.SLACK_CHANNEL_ID }}
-            ts: ${{ needs.notify-start.outputs.slack_ts }}
-            text: "❌ Release ${{ github.ref_name }} failed"
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "*Release ${{ github.ref_name }}* ❌\n\n❌ Tests failed\n⬜ Creating release...\n⬜ Building binaries (0/9)\n⬜ Validating release..."
-              - type: "context"
-                elements:
-                  - type: "mrkdwn"
-                    text: "Triggered by ${{ github.actor }} | <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>"
+      - name: Stop III Engine
+        if: always() && steps.engine.outputs.engine-available == 'true'
+        uses: ./.github/actions/stop-iii-engine
 
   create-release:
     name: Create Release
-    needs: [notify-start, test]
+    needs: [notify-start, test-node, test-python, test-rust]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -140,7 +215,7 @@ jobs:
           prerelease: false
           generate_release_notes: true
 
-      - name: Update Slack - Release Created
+      - name: Update Slack - Tests passed, release created
         uses: slackapi/slack-github-action@v2.0.0
         with:
           method: chat.update
@@ -148,20 +223,106 @@ jobs:
           payload: |
             channel: ${{ secrets.SLACK_CHANNEL_ID }}
             ts: ${{ needs.notify-start.outputs.slack_ts }}
-            text: "🚀 Release ${{ github.ref_name }} in progress"
+            text: "Release ${{ github.ref_name }} in progress"
             blocks:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Release ${{ github.ref_name }}* 🚀\n\n✅ Tests passed\n✅ Release created\n⏳ Building binaries (0/9)\n⬜ Validating release..."
+                  text: "*Release ${{ github.ref_name }}*\n\n:white_check_mark: Tests passed (Node, Python, Rust)\n:white_check_mark: Release created\n:hourglass: Publishing SDKs...\n:white_square: Building binaries (0/9)"
               - type: "context"
                 elements:
                   - type: "mrkdwn"
                     text: "Triggered by ${{ github.actor }} | <${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}|View Release>"
 
-  build-release:
-    name: Build Release Binaries
-    needs: [notify-start, create-release]
+  publish-node:
+    name: Publish Node SDK
+    needs: [create-release]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        working-directory: packages/node
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SDK
+        working-directory: packages/node/iii
+        run: pnpm build
+
+      - name: Publish to npm
+        working-directory: packages/node/iii
+        run: pnpm publish --access restricted --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-python:
+    name: Publish Python SDK
+    needs: [create-release]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build package
+        working-directory: packages/python/iii
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/python/iii/dist/
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+  publish-rust:
+    name: Publish Rust SDK
+    needs: [create-release]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/rust/iii
+
+      - name: Publish to crates.io
+        working-directory: packages/rust/iii
+        run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  build-rust-binaries:
+    name: Build Rust Binaries
+    needs: [create-release]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -209,6 +370,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+          workspaces: packages/rust/iii
 
       - name: Build and upload binary
         uses: taiki-e/upload-rust-binary-action@v1
@@ -218,31 +380,39 @@ jobs:
           tar: unix
           zip: windows
           token: ${{ steps.generate_token.outputs.token }}
+          manifest-path: packages/rust/iii/Cargo.toml
 
-  notify-builds-complete:
-    name: Update Build Status
-    needs: [notify-start, build-release]
+  notify-complete:
+    name: Update Release Status
+    needs: [notify-start, publish-node, publish-python, publish-rust, build-rust-binaries]
     runs-on: ubuntu-latest
     if: always()
 
     steps:
-      - name: Check build results
-        id: check_builds
+      - name: Check results
+        id: results
         run: |
-          RESULT='${{ needs.build-release.result }}'
-          echo "Build result: $RESULT"
-          
-          if [ "$RESULT" == "success" ]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "count=9" >> $GITHUB_OUTPUT
-            echo "emoji=✅" >> $GITHUB_OUTPUT
-          else
-            echo "status=partial" >> $GITHUB_OUTPUT
-            echo "count=partial" >> $GITHUB_OUTPUT
-            echo "emoji=⚠️" >> $GITHUB_OUTPUT
-          fi
+          NODE_RESULT='${{ needs.publish-node.result }}'
+          PYTHON_RESULT='${{ needs.publish-python.result }}'
+          RUST_PUBLISH_RESULT='${{ needs.publish-rust.result }}'
+          RUST_BINARIES_RESULT='${{ needs.build-rust-binaries.result }}'
 
-      - name: Update Slack - Builds Complete
+          NODE_ICON="white_check_mark"
+          PYTHON_ICON="white_check_mark"
+          RUST_PUBLISH_ICON="white_check_mark"
+          RUST_BINARIES_ICON="white_check_mark"
+
+          if [ "$NODE_RESULT" != "success" ]; then NODE_ICON="x"; fi
+          if [ "$PYTHON_RESULT" != "success" ]; then PYTHON_ICON="x"; fi
+          if [ "$RUST_PUBLISH_RESULT" != "success" ]; then RUST_PUBLISH_ICON="x"; fi
+          if [ "$RUST_BINARIES_RESULT" != "success" ]; then RUST_BINARIES_ICON="x"; fi
+
+          echo "node_icon=$NODE_ICON" >> $GITHUB_OUTPUT
+          echo "python_icon=$PYTHON_ICON" >> $GITHUB_OUTPUT
+          echo "rust_publish_icon=$RUST_PUBLISH_ICON" >> $GITHUB_OUTPUT
+          echo "rust_binaries_icon=$RUST_BINARIES_ICON" >> $GITHUB_OUTPUT
+
+      - name: Update Slack - Release Complete
         uses: slackapi/slack-github-action@v2.0.0
         with:
           method: chat.update
@@ -250,14 +420,13 @@ jobs:
           payload: |
             channel: ${{ secrets.SLACK_CHANNEL_ID }}
             ts: ${{ needs.notify-start.outputs.slack_ts }}
-            text: "${{ steps.check_builds.outputs.emoji }} Release ${{ github.ref_name }} builds complete"
+            text: "Release ${{ github.ref_name }} complete"
             blocks:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Release ${{ github.ref_name }}* 🚀\n\n✅ Tests passed\n✅ Release created\n${{ steps.check_builds.outputs.emoji }} Binaries built (${{ steps.check_builds.outputs.count }}/9)\n⏳ Validating release..."
+                  text: "*Release ${{ github.ref_name }}*\n\n:white_check_mark: Tests passed (Node, Python, Rust)\n:white_check_mark: Release created\n:${{ steps.results.outputs.node_icon }}: Node SDK published to npm\n:${{ steps.results.outputs.python_icon }}: Python SDK published to PyPI\n:${{ steps.results.outputs.rust_publish_icon }}: Rust SDK published to crates.io\n:${{ steps.results.outputs.rust_binaries_icon }}: Rust binaries built (9 platforms)"
               - type: "context"
                 elements:
                   - type: "mrkdwn"
                     text: "Triggered by ${{ github.actor }} | <${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}|View Release>"
-

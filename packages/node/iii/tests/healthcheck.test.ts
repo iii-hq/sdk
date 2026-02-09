@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { ApiRequest, ApiResponse } from '../src'
+import { skipIfServerUnavailable } from './setup'
 import { execute, httpRequest, iii } from './utils'
 
-describe('Healthcheck Endpoint', () => {
+describe.skipIf(skipIfServerUnavailable())('Healthcheck Endpoint', () => {
   it('should register a healthcheck function and trigger', async () => {
     const functionId = 'test.healthcheck'
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { skipIfServerUnavailable } from './setup'
 import { iii, sleep } from './utils'
 import type { StreamSetInput, StreamSetResult } from '../src/streams'
 
@@ -8,7 +9,7 @@ type TestData = {
   updated?: boolean
 }
 
-describe('Stream Operations', () => {
+describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
   const testStreamName = 'test-stream'
   const testGroupId = 'test-group'
   const testItemId = 'test-item'

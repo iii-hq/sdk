@@ -53,10 +53,12 @@ jobs:
         run: |
           echo "Running pre-flight checks..."
           
-          if [ ! -f "Cargo.toml" ]; then
-            echo "Error: Cargo.toml not found"
-            exit 1
-          fi
+          for f in packages/rust/iii/Cargo.toml packages/node/iii/package.json packages/python/iii/pyproject.toml; do
+            if [ ! -f "$f" ]; then
+              echo "Error: $f not found"
+              exit 1
+            fi
+          done
           
           CURRENT_BRANCH=$(git branch --show-current)
           if [ "$CURRENT_BRANCH" != "main" ]; then
@@ -71,7 +73,7 @@ jobs:
             exit 1
           fi
           
-          echo "✅ Pre-flight checks passed"
+          echo "Pre-flight checks passed"
 
       - name: Get latest tag
         id: get_latest_tag
@@ -133,53 +135,60 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - name: Update Cargo.toml version
         run: |
           NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
-          sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" Cargo.toml
-          rm Cargo.toml.bak
-          git diff Cargo.toml
+          sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/rust/iii/Cargo.toml
+          rm packages/rust/iii/Cargo.toml.bak
+          git diff packages/rust/iii/Cargo.toml
 
       - name: Update package.json version
         run: |
           NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
-          cd packages/node/iii
-          sed -i.bak "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
-          rm package.json.bak
-          git diff package.json
+          sed -i.bak "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" packages/node/iii/package.json
+          rm packages/node/iii/package.json.bak
+          git diff packages/node/iii/package.json
 
-      - name: Validate Cargo.toml
+      - name: Update pyproject.toml version
         run: |
           NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
-          CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -n1 | cut -d'"' -f2)
+          sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/iii/pyproject.toml
+          rm packages/python/iii/pyproject.toml.bak
+          git diff packages/python/iii/pyproject.toml
+
+      - name: Validate versions
+        run: |
+          NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
           
+          CARGO_VERSION=$(grep '^version = ' packages/rust/iii/Cargo.toml | head -n1 | cut -d'"' -f2)
           if [ "$CARGO_VERSION" != "$NEW_VERSION" ]; then
-            echo "Error: Cargo.toml version ($CARGO_VERSION) does not match tag version ($NEW_VERSION)"
+            echo "Error: Cargo.toml version ($CARGO_VERSION) does not match $NEW_VERSION"
             exit 1
           fi
+          echo "Cargo.toml version OK"
           
-          echo "✅ Cargo.toml version matches tag version"
-
-      - name: Validate package.json
-        run: |
-          NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
           PACKAGE_VERSION=$(grep '"version":' packages/node/iii/package.json | head -n1 | cut -d'"' -f4)
-          
           if [ "$PACKAGE_VERSION" != "$NEW_VERSION" ]; then
-            echo "Error: package.json version ($PACKAGE_VERSION) does not match tag version ($NEW_VERSION)"
+            echo "Error: package.json version ($PACKAGE_VERSION) does not match $NEW_VERSION"
             exit 1
           fi
+          echo "package.json version OK"
           
-          echo "✅ package.json version matches tag version"
+          PYPROJECT_VERSION=$(grep '^version = ' packages/python/iii/pyproject.toml | head -n1 | cut -d'"' -f2)
+          if [ "$PYPROJECT_VERSION" != "$NEW_VERSION" ]; then
+            echo "Error: pyproject.toml version ($PYPROJECT_VERSION) does not match $NEW_VERSION"
+            exit 1
+          fi
+          echo "pyproject.toml version OK"
 
       - name: Commit version bump
         run: |
           NEW_TAG="${{ steps.calc_version.outputs.new_tag }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml packages/node/iii/package.json
+          git add packages/rust/iii/Cargo.toml packages/node/iii/package.json packages/python/iii/pyproject.toml
           git commit -m "chore: bump version to $NEW_TAG"
           git push origin main
 

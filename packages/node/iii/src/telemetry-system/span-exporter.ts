@@ -3,10 +3,10 @@
  */
 
 import { ExportResultCode, type ExportResult } from '@opentelemetry/core'
-import { type ReadableSpan, type SpanExporter } from '@opentelemetry/sdk-trace-base'
+import type { ReadableSpan, SpanExporter } from '@opentelemetry/sdk-trace-base'
 import { JsonTraceSerializer } from '@opentelemetry/otlp-transformer'
 
-import { SharedEngineConnection } from './connection'
+import type { SharedEngineConnection } from './connection'
 import { PREFIX_TRACES } from './types'
 
 /**
@@ -15,7 +15,10 @@ import { PREFIX_TRACES } from './types'
 export class EngineSpanExporter implements SpanExporter {
   private static readonly MAX_PENDING_EXPORTS = 100
   private connection: SharedEngineConnection
-  private pendingExports: Array<{ spans: ReadableSpan[]; resultCallback?: (result: ExportResult) => void }> = []
+  private pendingExports: Array<{
+    spans: ReadableSpan[]
+    resultCallback?: (result: ExportResult) => void
+  }> = []
 
   constructor(connection: SharedEngineConnection) {
     this.connection = connection
@@ -37,7 +40,7 @@ export class EngineSpanExporter implements SpanExporter {
         return
       }
 
-      this.connection.send(PREFIX_TRACES, serialized, (err) => {
+      this.connection.send(PREFIX_TRACES, serialized, err => {
         if (err) {
           console.error('[OTel] Failed to send spans:', err.message)
           resultCallback?.({ code: ExportResultCode.FAILED, error: err })
@@ -55,7 +58,10 @@ export class EngineSpanExporter implements SpanExporter {
     if (this.connection.getState() !== 'connected') {
       if (this.pendingExports.length >= EngineSpanExporter.MAX_PENDING_EXPORTS) {
         const dropped = this.pendingExports.shift()
-        dropped?.resultCallback?.({ code: ExportResultCode.FAILED, error: new Error('Queue overflow') })
+        dropped?.resultCallback?.({
+          code: ExportResultCode.FAILED,
+          error: new Error('Queue overflow'),
+        })
         console.warn('[OTel] Spans export queue full, dropped oldest entry')
       }
       this.pendingExports.push({ spans, resultCallback })

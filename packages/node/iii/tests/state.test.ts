@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { skipIfServerUnavailable } from './setup'
 import { iii } from './utils'
 import type { StateSetResult } from './types'
 
@@ -8,7 +9,7 @@ type TestData = {
   updated?: boolean
 }
 
-describe('State Operations', () => {
+describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
   const testGroupId = 'test-group'
   const testItemId = 'test-item'
 

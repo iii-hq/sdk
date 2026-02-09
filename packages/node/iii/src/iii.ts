@@ -488,7 +488,7 @@ class Sdk implements ISdk {
       return // Already scheduled
     }
 
-    const exponentialDelay = initialDelayMs * Math.pow(backoffMultiplier, this.reconnectAttempt)
+    const exponentialDelay = initialDelayMs * backoffMultiplier ** this.reconnectAttempt
     const cappedDelay = Math.min(exponentialDelay, maxDelayMs)
     const jitter = cappedDelay * jitterFactor * (2 * Math.random() - 1)
     const delay = Math.floor(cappedDelay + jitter)

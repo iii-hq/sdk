@@ -18,6 +18,9 @@ iii-sdk = { path = "../iii", editable = true }
 [project.scripts]
 iii-example = "src.main:main"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"

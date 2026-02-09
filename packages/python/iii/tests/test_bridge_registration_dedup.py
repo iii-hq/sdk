@@ -35,8 +35,11 @@ def anyio_backend() -> str:
 @pytest.mark.anyio
 async def test_preconnect_registration_sent_once(monkeypatch: pytest.MonkeyPatch) -> None:
     ws = FakeWebSocket()
+    connect_calls = 0
 
     async def fake_connect(_addr: str) -> FakeWebSocket:
+        nonlocal connect_calls
+        connect_calls += 1
         return ws
 
     monkeypatch.setattr(bridge_module.websockets, "connect", fake_connect)
@@ -50,6 +53,8 @@ async def test_preconnect_registration_sent_once(monkeypatch: pytest.MonkeyPatch
     client.register_function("demo.fn", handler)
     client.register_trigger("cron", "demo.fn", {"cron": "* * * * * *"})
 
+    assert client._queue == []
+
     await client.connect()
     await asyncio.sleep(0.01)
     await client.shutdown()
@@ -57,5 +62,6 @@ async def test_preconnect_registration_sent_once(monkeypatch: pytest.MonkeyPatch
     reg_fn = [m for m in ws.sent if m.get("type") == "registerfunction" and m.get("id") == "demo.fn"]
     reg_trigger = [m for m in ws.sent if m.get("type") == "registertrigger" and m.get("function_id") == "demo.fn"]
 
-    assert len(reg_fn) == 1
-    assert len(reg_trigger) == 1
+    assert connect_calls == 1
+    assert len(reg_fn) == 1, ws.sent
+    assert len(reg_trigger) == 1, ws.sent

@@ -162,6 +162,15 @@ class III:
     def _enqueue(self, msg: Any) -> None:
         self._queue.append(self._to_dict(msg))
 
+    def _send_if_connected(self, msg: Any) -> None:
+        if not (self._ws and self._ws.state.name == "OPEN"):
+            return
+        try:
+            asyncio.get_running_loop().create_task(self._send(msg))
+        except RuntimeError:
+            # If there is no running event loop, replay-on-connect still preserves durable state.
+            pass
+
     async def _handle_message(self, raw: str | bytes) -> None:
         data = json.loads(raw if isinstance(raw, str) else raw.decode())
         msg_type = data.get("type")
@@ -265,12 +274,12 @@ class III:
 
     def register_trigger_type(self, id: str, description: str, handler: TriggerHandler[Any]) -> None:
         msg = RegisterTriggerTypeMessage(id=id, description=description)
-        self._enqueue(msg)
         self._trigger_types[id] = RemoteTriggerTypeData(message=msg, handler=handler)
+        self._send_if_connected(msg)
 
     def unregister_trigger_type(self, id: str) -> None:
-        self._enqueue(UnregisterTriggerTypeMessage(id=id))
         self._trigger_types.pop(id, None)
+        self._send_if_connected(UnregisterTriggerTypeMessage(id=id))
 
     def register_trigger(self, trigger_type: str, function_id: str, config: Any) -> Trigger:
         trigger_id = str(uuid.uuid4())
@@ -280,18 +289,18 @@ class III:
             function_id=function_id,
             config=config,
         )
-        self._enqueue(msg)
         self._triggers[trigger_id] = msg
+        self._send_if_connected(msg)
 
         def unregister() -> None:
-            self._enqueue(UnregisterTriggerMessage(id=trigger_id))
             self._triggers.pop(trigger_id, None)
+            self._send_if_connected(UnregisterTriggerMessage(id=trigger_id))
 
         return Trigger(unregister)
 
     def register_function(self, path: str, handler: RemoteFunctionHandler, description: str | None = None) -> None:
         msg = RegisterFunctionMessage(id=path, description=description)
-        self._enqueue(msg)
+        self._send_if_connected(msg)
 
         async def wrapped(input_data: Any) -> Any:
             trace_id = str(uuid.uuid4())
@@ -318,8 +327,8 @@ class III:
 
     def register_service(self, id: str, description: str | None = None, parent_id: str | None = None) -> None:
         msg = RegisterServiceMessage(id=id, description=description, parent_service_id=parent_id)
-        self._enqueue(msg)
         self._services[id] = msg
+        self._send_if_connected(msg)
 
     async def call(self, path: str, data: Any, timeout: float = 30.0) -> Any:
         """Invoke a remote function and wait for the result."""

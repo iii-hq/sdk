@@ -125,7 +125,8 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
 
     - name: Start engine server
-      if: steps.setup.outputs.engine-available == 'true'
+      id: start
+      if: steps.setup.outputs.engine_available == 'true'
       shell: bash
       run: |
         mkdir -p /tmp/iii-engine-data
@@ -146,7 +147,7 @@ runs:
 
     - name: Wait for engine health check
       id: healthcheck
-      if: steps.setup.outputs.engine-available == 'true'
+      if: steps.setup.outputs.engine_available == 'true'
       shell: bash
       run: |
         for i in {1..30}; do
@@ -164,11 +165,12 @@ runs:
 
     - name: Set final output
       id: final
+      if: always()
       shell: bash
       run: |
-        RESOLVE_OUTPUT="${{ steps.resolve.outputs.engine-available }}"
-        SETUP_OUTPUT="${{ steps.setup.outputs.engine-available }}"
-        HEALTHCHECK_OUTPUT="${{ steps.healthcheck.outputs.engine-available }}"
+        RESOLVE_OUTPUT="${{ steps.resolve.outputs.engine_available }}"
+        SETUP_OUTPUT="${{ steps.setup.outputs.engine_available }}"
+        HEALTHCHECK_OUTPUT="${{ steps.healthcheck.outputs.engine_available }}"
 
         if [ "$RESOLVE_OUTPUT" = "false" ] || [ "$SETUP_OUTPUT" = "false" ] || [ "$HEALTHCHECK_OUTPUT" = "false" ]; then
           echo "engine_available=false" >> $GITHUB_OUTPUT

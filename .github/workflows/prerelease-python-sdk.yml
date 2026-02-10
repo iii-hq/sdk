@@ -63,10 +63,10 @@ jobs:
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
           
           case "$TAG" in
-            alpha) NEW_VERSION="${BASE_VERSION}a${TIMESTAMP}" ;;
-            beta)  NEW_VERSION="${BASE_VERSION}b${TIMESTAMP}" ;;
-            rc)    NEW_VERSION="${BASE_VERSION}rc${TIMESTAMP}" ;;
-            *)     NEW_VERSION="${BASE_VERSION}.dev${TIMESTAMP}" ;;
+            alpha) NEW_VERSION="${BASE_VERSION}-alpha.${TIMESTAMP}" ;;
+            beta)  NEW_VERSION="${BASE_VERSION}-beta.${TIMESTAMP}" ;;
+            rc)    NEW_VERSION="${BASE_VERSION}-rc.${TIMESTAMP}" ;;
+            *)     NEW_VERSION="${BASE_VERSION}-${TAG}.${TIMESTAMP}" ;;
           esac
           
           sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml

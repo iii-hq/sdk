@@ -52,6 +52,36 @@ jobs:
           path: slack-data/
           retention-days: 1
 
+  detect-prerelease:
+    name: Detect Pre-release
+    runs-on: ubuntu-latest
+    outputs:
+      is_prerelease: ${{ steps.check.outputs.is_prerelease }}
+      npm_tag: ${{ steps.check.outputs.npm_tag }}
+
+    steps:
+      - name: Check tag format
+        id: check
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [[ "$TAG" =~ -alpha$ ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=alpha" >> $GITHUB_OUTPUT
+            echo "Detected pre-release: true (alpha)"
+          elif [[ "$TAG" =~ -beta$ ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=beta" >> $GITHUB_OUTPUT
+            echo "Detected pre-release: true (beta)"
+          elif [[ "$TAG" =~ -rc$ ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=rc" >> $GITHUB_OUTPUT
+            echo "Detected pre-release: true (rc)"
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "npm_tag=latest" >> $GITHUB_OUTPUT
+            echo "Detected stable release (npm tag: latest)"
+          fi
+
   test-node:
     name: Test Node.js SDK
     runs-on: ubuntu-latest
@@ -136,7 +166,7 @@ jobs:
 
   create-release:
     name: Create Release
-    needs: [notify-start, test-node, test-python, test-rust]
+    needs: [notify-start, detect-prerelease, test-node, test-python, test-rust]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -158,7 +188,7 @@ jobs:
         with:
           token: ${{ steps.generate_token.outputs.token }}
           draft: false
-          prerelease: false
+          prerelease: ${{ needs.detect-prerelease.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
 
       - name: Update Slack - Tests passed, release created
@@ -182,7 +212,7 @@ jobs:
 
   publish-node:
     name: Publish Node SDK
-    needs: [create-release]
+    needs: [detect-prerelease, create-release]
     runs-on: ubuntu-latest
 
     steps:
@@ -210,7 +240,7 @@ jobs:
 
       - name: Publish to npm
         working-directory: packages/node/iii
-        run: pnpm publish --access public --no-git-checks --tag latest
+        run: pnpm publish --access public --no-git-checks --tag ${{ needs.detect-prerelease.outputs.npm_tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

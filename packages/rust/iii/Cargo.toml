@@ -4,6 +4,11 @@ version = "0.0.0"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["Motia LLC"]
+description = "SDK for III Engine - a platform for building distributed applications"
+repository = "https://github.com/iii-hq/sdk"
+homepage = "https://github.com/iii-hq/sdk"
+keywords = ["iii", "sdk", "engine", "distributed"]
+categories = ["api-bindings", "asynchronous", "development-tools]
 
 [lib]
 name = "iii_sdk"

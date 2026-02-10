@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class MessageType(str, Enum):
-    """Message types for III communication."""
+    """Message types for iii communication."""
 
     REGISTER_FUNCTION = "registerfunction"
     REGISTER_SERVICE = "registerservice"

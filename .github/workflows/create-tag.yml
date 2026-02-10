@@ -3,8 +3,8 @@ name: Create Tag
 on:
   workflow_dispatch:
     inputs:
-      version_type:
-        description: 'Version bump type'
+      bump:
+        description: 'Version bump'
         required: true
         type: choice
         options:
@@ -80,28 +80,28 @@ jobs:
           
           echo "Pre-flight checks passed"
 
-      - name: Get latest tag
+      - name: Get latest stable tag
         id: get_latest_tag
         run: |
           git fetch --tags
-          LATEST_TAG=$(git tag -l "v*" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="v0.0.0"
+          LATEST_STABLE=$(git tag -l "v*" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          if [ -z "$LATEST_STABLE" ]; then
+            LATEST_STABLE="v0.0.0"
           fi
-          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          echo "Latest stable tag: $LATEST_TAG"
+          echo "latest_tag=$LATEST_STABLE" >> $GITHUB_OUTPUT
+          echo "Latest stable tag: $LATEST_STABLE"
 
       - name: Calculate new version
         id: calc_version
         run: |
           LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
-          VERSION_TYPE="${{ github.event.inputs.version_type }}"
+          BUMP="${{ github.event.inputs.bump }}"
           PRE_RELEASE="${{ github.event.inputs.pre_release }}"
           
           VERSION="${LATEST_TAG#v}"
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
           
-          case "$VERSION_TYPE" in
+          case "$BUMP" in
             major)
               MAJOR=$((MAJOR + 1))
               MINOR=0
@@ -115,14 +115,33 @@ jobs:
               PATCH=$((PATCH + 1))
               ;;
             *)
-              echo "Error: Invalid version_type: $VERSION_TYPE"
+              echo "Error: Invalid bump type: $BUMP"
               exit 1
               ;;
           esac
           
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          BASE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          
           if [ "$PRE_RELEASE" != "none" ]; then
-            NEW_VERSION="${NEW_VERSION}-${PRE_RELEASE}"
+            echo "Finding existing pre-release tags for v${BASE_VERSION}-${PRE_RELEASE}..."
+            EXISTING_TAGS=$(git tag -l "v${BASE_VERSION}-${PRE_RELEASE}.*" | sort -V)
+            
+            if [ -z "$EXISTING_TAGS" ]; then
+              PRE_NUMBER=1
+              echo "No existing pre-release tags found, starting at .1"
+            else
+              LATEST_PRE=$(echo "$EXISTING_TAGS" | tail -n1)
+              echo "Latest pre-release tag: $LATEST_PRE"
+              PRE_NUMBER=$(echo "$LATEST_PRE" | grep -oE '\.[0-9]+$' | tr -d '.')
+              PRE_NUMBER=$((PRE_NUMBER + 1))
+              echo "Incrementing to .${PRE_NUMBER}"
+            fi
+            
+            NEW_VERSION="${BASE_VERSION}-${PRE_RELEASE}.${PRE_NUMBER}"
+            PYTHON_VERSION="${BASE_VERSION}${PRE_RELEASE:0:1}${PRE_NUMBER}"
+          else
+            NEW_VERSION="${BASE_VERSION}"
+            PYTHON_VERSION="${BASE_VERSION}"
           fi
           
           NEW_TAG="v${NEW_VERSION}"
@@ -134,7 +153,12 @@ jobs:
           
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "New tag will be: $NEW_TAG"
+          echo "python_version=$PYTHON_VERSION" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$( [ "$PRE_RELEASE" != "none" ] && echo "true" || echo "false" )" >> $GITHUB_OUTPUT
+          echo ""
+          echo "New tag: $NEW_TAG"
+          echo "Rust/Node version: $NEW_VERSION"
+          echo "Python version: $PYTHON_VERSION"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -151,6 +175,7 @@ jobs:
           NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
           sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/rust/iii/Cargo.toml
           rm packages/rust/iii/Cargo.toml.bak
+          echo "Updated Cargo.toml to version $NEW_VERSION"
           git diff packages/rust/iii/Cargo.toml
 
       - name: Update package.json version
@@ -158,47 +183,58 @@ jobs:
           NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
           sed -i.bak "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" packages/node/iii/package.json
           rm packages/node/iii/package.json.bak
+          echo "Updated package.json to version $NEW_VERSION"
           git diff packages/node/iii/package.json
 
       - name: Update pyproject.toml version
         run: |
-          NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
-          sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/iii/pyproject.toml
+          PYTHON_VERSION="${{ steps.calc_version.outputs.python_version }}"
+          sed -i.bak "s/^version = \".*\"/version = \"$PYTHON_VERSION\"/" packages/python/iii/pyproject.toml
           rm packages/python/iii/pyproject.toml.bak
+          echo "Updated pyproject.toml to version $PYTHON_VERSION (PEP 440 format)"
           git diff packages/python/iii/pyproject.toml
 
       - name: Validate versions
         run: |
           NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
+          PYTHON_VERSION="${{ steps.calc_version.outputs.python_version }}"
           
           CARGO_VERSION=$(grep '^version = ' packages/rust/iii/Cargo.toml | head -n1 | cut -d'"' -f2)
           if [ "$CARGO_VERSION" != "$NEW_VERSION" ]; then
             echo "Error: Cargo.toml version ($CARGO_VERSION) does not match $NEW_VERSION"
             exit 1
           fi
-          echo "Cargo.toml version OK"
+          echo "Cargo.toml version OK: $CARGO_VERSION"
           
           PACKAGE_VERSION=$(grep '"version":' packages/node/iii/package.json | head -n1 | cut -d'"' -f4)
           if [ "$PACKAGE_VERSION" != "$NEW_VERSION" ]; then
             echo "Error: package.json version ($PACKAGE_VERSION) does not match $NEW_VERSION"
             exit 1
           fi
-          echo "package.json version OK"
+          echo "package.json version OK: $PACKAGE_VERSION"
           
           PYPROJECT_VERSION=$(grep '^version = ' packages/python/iii/pyproject.toml | head -n1 | cut -d'"' -f2)
-          if [ "$PYPROJECT_VERSION" != "$NEW_VERSION" ]; then
-            echo "Error: pyproject.toml version ($PYPROJECT_VERSION) does not match $NEW_VERSION"
+          if [ "$PYPROJECT_VERSION" != "$PYTHON_VERSION" ]; then
+            echo "Error: pyproject.toml version ($PYPROJECT_VERSION) does not match $PYTHON_VERSION"
             exit 1
           fi
-          echo "pyproject.toml version OK"
+          echo "pyproject.toml version OK: $PYPROJECT_VERSION"
 
       - name: Commit version bump
         run: |
           NEW_TAG="${{ steps.calc_version.outputs.new_tag }}"
+          IS_PRERELEASE="${{ steps.calc_version.outputs.is_prerelease }}"
+          
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add packages/rust/iii/Cargo.toml packages/node/iii/package.json packages/python/iii/pyproject.toml
-          git commit -m "chore: bump version to $NEW_TAG"
+          
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            git commit -m "chore: bump version to $NEW_TAG (pre-release)"
+          else
+            git commit -m "chore: bump version to $NEW_TAG"
+          fi
+          
           git push origin main
 
       - name: Generate changelog
@@ -225,7 +261,14 @@ jobs:
       - name: Create and push tag
         run: |
           NEW_TAG="${{ steps.calc_version.outputs.new_tag }}"
-          git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+          IS_PRERELEASE="${{ steps.calc_version.outputs.is_prerelease }}"
+          
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            git tag -a "$NEW_TAG" -m "Pre-release $NEW_TAG"
+          else
+            git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+          fi
+          
           git push origin "$NEW_TAG"
           echo "Created and pushed tag: $NEW_TAG"
         env:
@@ -234,11 +277,23 @@ jobs:
       - name: Summary
         run: |
           NEW_TAG="${{ steps.calc_version.outputs.new_tag }}"
-          echo "### Tag Created Successfully! 🎉" >> $GITHUB_STEP_SUMMARY
+          IS_PRERELEASE="${{ steps.calc_version.outputs.is_prerelease }}"
+          BUMP="${{ github.event.inputs.bump }}"
+          PRE_RELEASE="${{ github.event.inputs.pre_release }}"
+          
+          echo "### Tag Created Successfully!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**New Tag:** \`$NEW_TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Bump Type:** \`$BUMP\`" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            echo "**Pre-release:** \`$PRE_RELEASE\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Type:** Stable release" >> $GITHUB_STEP_SUMMARY
+          fi
+          
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The release workflow will now automatically build binaries for all platforms." >> $GITHUB_STEP_SUMMARY
+          echo "The release workflow will now automatically trigger." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "View the release progress: [Actions](https://github.com/${{ github.repository }}/actions)" >> $GITHUB_STEP_SUMMARY
 
@@ -249,13 +304,13 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "🏷️ New tag ${{ steps.calc_version.outputs.new_tag }} created",
+              "text": "New tag ${{ steps.calc_version.outputs.new_tag }} created",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*New Tag Created* 🏷️\n\nVersion: `${{ steps.calc_version.outputs.new_tag }}`\nBump: `${{ github.event.inputs.version_type }}`\nPre-release: `${{ github.event.inputs.pre_release }}`\nCreated by: ${{ github.actor }}\n\nRelease workflow will now build binaries for all platforms."
+                    "text": "*New Tag Created*\n\nVersion: `${{ steps.calc_version.outputs.new_tag }}`\nBump: `${{ github.event.inputs.bump }}`\nPre-release: `${{ github.event.inputs.pre_release }}`\nCreated by: ${{ github.actor }}\n\nRelease workflow will now trigger automatically."
                   }
                 },
                 {

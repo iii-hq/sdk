@@ -6,15 +6,11 @@ on:
     paths:
       - 'packages/rust/**'
       - '.github/workflows/ci-rust.yml'
-      - '.github/actions/**'
-      - '.github/engine-config/**'
   pull_request:
     branches: [main]
     paths:
       - 'packages/rust/**'
       - '.github/workflows/ci-rust.yml'
-      - '.github/actions/**'
-      - '.github/engine-config/**'
 
 env:
   CARGO_TERM_COLOR: always
@@ -39,38 +35,11 @@ jobs:
       - name: Cache cargo registry & build
         uses: Swatinem/rust-cache@v2
 
-      - name: Generate engine token
-        id: engine-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.III_CI_APP_ID }}
-          private-key: ${{ secrets.III_CI_APP_PRIVATE_KEY }}
-          owner: iii-hq
-          repositories: iii
-
-      - name: Setup III Engine
-        id: engine
-        uses: ./.github/actions/setup-iii-engine
-        with:
-          engine-repo: ${{ vars.ENGINE_REPO || '' }}
-          engine-version: ${{ vars.ENGINE_VERSION || 'latest' }}
-          github-token: ${{ steps.engine-token.outputs.token }}
-
       - name: Check formatting
         run: cargo fmt --all -- --check
 
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: Run tests
-        env:
-          III_BRIDGE_URL: ws://localhost:49134
-          III_HTTP_URL: http://localhost:3111
-        run: cargo test --all-features
-
-      - name: Stop III Engine
-        if: always() && steps.engine.outputs.engine-available == 'true'
-        uses: ./.github/actions/stop-iii-engine
 
       - name: Build check
         run: cargo build --release

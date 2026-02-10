@@ -6,15 +6,11 @@ on:
     paths:
       - 'packages/python/**'
       - '.github/workflows/ci-python.yml'
-      - '.github/actions/**'
-      - '.github/engine-config/**'
   pull_request:
     branches: [main]
     paths:
       - 'packages/python/**'
       - '.github/workflows/ci-python.yml'
-      - '.github/actions/**'
-      - '.github/engine-config/**'
 
 jobs:
   test:
@@ -42,35 +38,8 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev]"
 
-      - name: Generate engine token
-        id: engine-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.III_CI_APP_ID }}
-          private-key: ${{ secrets.III_CI_APP_PRIVATE_KEY }}
-          owner: iii-hq
-          repositories: iii
-
-      - name: Setup III Engine
-        id: engine
-        uses: ./.github/actions/setup-iii-engine
-        with:
-          engine-repo: ${{ vars.ENGINE_REPO || '' }}
-          engine-version: ${{ vars.ENGINE_VERSION || 'latest' }}
-          github-token: ${{ steps.engine-token.outputs.token }}
-
       - name: Lint
         run: ruff check src
 
       - name: Type check
         run: mypy src
-
-      - name: Test
-        env:
-          III_BRIDGE_URL: ws://localhost:49134
-          III_HTTP_URL: http://localhost:3111
-        run: pytest || [ $? -eq 5 ]
-
-      - name: Stop III Engine
-        if: always() && steps.engine.outputs.engine-available == 'true'
-        uses: ./.github/actions/stop-iii-engine

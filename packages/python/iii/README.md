@@ -11,24 +11,52 @@ pip install iii-sdk
 ## Usage
 
 ```python
-from iii import III, Logger
+import asyncio
+from iii import III
 
-# Create an III SDK instance
-iii = III("ws://localhost:8080")
-
-# Register a function
-@iii.function("my.function")
 async def my_function(data):
     return {"result": "success"}
 
-# Invoke a function
-result = await iii.call("other.function", {"param": "value"})
+iii = III("ws://localhost:49134")
+iii.register_function("my.function", my_function)
+
+async def main():
+    await iii.connect()
+
+    result = await iii.call("other.function", {"param": "value"})
+    print(result)
+
+asyncio.run(main())
 ```
 
-### Build & Publish
-```bash
-python -m build
-uv publish --index cloudsmith dist/*
+### Register API trigger
+
+```python
+import asyncio
+from iii import III, ApiRequest, ApiResponse
+
+iii = III("ws://localhost:49134")
+
+async def create_todo(data):    
+    req = ApiRequest(**data)
+    return ApiResponse(status=201, data={"id": "123", "title": req.body.get("title")})
+
+iii.register_function("api.post.todo", create_todo)
+
+async def main():
+    await iii.connect()
+
+    iii.register_trigger(
+        trigger_type="api",
+        function_id="api.post.todo",
+        config={
+            "api_path": "/todo",
+            "http_method": "POST",
+            "description": "Create a new todo"
+        }
+    )
+
+asyncio.run(main())
 ```
 
 ## Features

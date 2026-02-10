@@ -1,11 +1,23 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::Duration,
 };
+
+/// Extension trait for Mutex that recovers from poisoning instead of panicking.
+/// This is safe when the protected data is still valid after a panic in another thread.
+trait MutexExt<T> {
+    fn lock_or_recover(&self) -> MutexGuard<'_, T>;
+}
+
+impl<T> MutexExt<T> for Mutex<T> {
+    fn lock_or_recover(&self) -> MutexGuard<'_, T> {
+        self.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
 
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -30,6 +42,11 @@ use crate::{
     triggers::{Trigger, TriggerConfig, TriggerHandler},
     types::{RemoteFunctionData, RemoteFunctionHandler, RemoteTriggerTypeData},
 };
+
+#[cfg(feature = "otel")]
+use crate::telemetry;
+#[cfg(feature = "otel")]
+use crate::telemetry::types::OtelConfig;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -112,6 +129,19 @@ type WsTx = futures_util::stream::SplitSink<
     WsMessage,
 >;
 
+/// Inject trace context headers for outbound messages.
+/// Returns (traceparent, baggage) - both None when otel feature is disabled.
+#[cfg(feature = "otel")]
+fn inject_trace_headers() -> (Option<String>, Option<String>) {
+    use crate::telemetry::context;
+    (context::inject_traceparent(), context::inject_baggage())
+}
+
+#[cfg(not(feature = "otel"))]
+fn inject_trace_headers() -> (Option<String>, Option<String>) {
+    (None, None)
+}
+
 /// Callback function type for functions available events
 pub type FunctionsAvailableCallback = Arc<dyn Fn(Vec<FunctionInfo>) + Send + Sync>;
 
@@ -131,6 +161,8 @@ struct IIIInner {
     functions_available_callback_counter: AtomicUsize,
     functions_available_function_id: Mutex<Option<String>>,
     functions_available_trigger: Mutex<Option<Trigger>>,
+    #[cfg(feature = "otel")]
+    otel_config: Mutex<Option<OtelConfig>>,
 }
 
 #[derive(Clone)]
@@ -146,11 +178,15 @@ pub struct FunctionsAvailableGuard {
 
 impl Drop for FunctionsAvailableGuard {
     fn drop(&mut self) {
-        let mut callbacks = self.iii.inner.functions_available_callbacks.lock().unwrap();
+        let mut callbacks = self
+            .iii
+            .inner
+            .functions_available_callbacks
+            .lock_or_recover();
         callbacks.remove(&self.callback_id);
 
         if callbacks.is_empty() {
-            let mut trigger = self.iii.inner.functions_available_trigger.lock().unwrap();
+            let mut trigger = self.iii.inner.functions_available_trigger.lock_or_recover();
             if let Some(trigger) = trigger.take() {
                 trigger.unregister();
             }
@@ -183,6 +219,8 @@ impl III {
             functions_available_callback_counter: AtomicUsize::new(0),
             functions_available_function_id: Mutex::new(None),
             functions_available_trigger: Mutex::new(None),
+            #[cfg(feature = "otel")]
+            otel_config: Mutex::new(None),
         };
         Self {
             inner: Arc::new(inner),
@@ -191,7 +229,13 @@ impl III {
 
     /// Set custom worker metadata (call before connect)
     pub fn set_metadata(&self, metadata: WorkerMetadata) {
-        *self.inner.worker_metadata.lock().unwrap() = Some(metadata);
+        *self.inner.worker_metadata.lock_or_recover() = Some(metadata);
+    }
+
+    /// Set OpenTelemetry configuration (call before connect)
+    #[cfg(feature = "otel")]
+    pub fn set_otel_config(&self, config: OtelConfig) {
+        *self.inner.otel_config.lock_or_recover() = Some(config);
     }
 
     pub async fn connect(&self) -> Result<(), IIIError> {
@@ -199,7 +243,7 @@ impl III {
             return Ok(());
         }
 
-        let receiver = self.inner.receiver.lock().unwrap().take();
+        let receiver = self.inner.receiver.lock_or_recover().take();
         let Some(rx) = receiver else {
             return Ok(());
         };
@@ -211,12 +255,61 @@ impl III {
             iii.run_connection(rx).await;
         });
 
+        // Initialize OpenTelemetry if configured.
+        // NOTE: This runs after the connection spawn, so the first few function
+        // invocations may not carry tracing context. The global tracer returns a
+        // no-op until initialization completes, so no panics occur — traces
+        // simply won't appear for those early calls.
+        #[cfg(feature = "otel")]
+        {
+            let config = self.inner.otel_config.lock_or_recover().take();
+            if let Some(mut config) = config {
+                // Default engine_ws_url to the III address if not set
+                if config.engine_ws_url.is_none() {
+                    config.engine_ws_url = Some(self.inner.address.clone());
+                }
+                telemetry::init_otel(config).await;
+            }
+        }
+
         Ok(())
     }
 
+    /// Shutdown the III client.
+    ///
+    /// This stops the connection loop and sends a shutdown signal.
+    /// If the `otel` feature is enabled, this will spawn a background task
+    /// to flush telemetry data, but does NOT wait for it to complete.
+    /// For guaranteed telemetry flush, use `shutdown_async()` instead.
+    #[deprecated(note = "Use shutdown_async() for guaranteed telemetry flush")]
     pub fn shutdown(&self) {
         self.inner.running.store(false, Ordering::SeqCst);
         let _ = self.inner.outbound.send(Outbound::Shutdown);
+
+        // Shutdown OpenTelemetry (best-effort, does not wait for flush)
+        #[cfg(feature = "otel")]
+        {
+            tracing::warn!(
+                "shutdown() does not await telemetry flush; use shutdown_async() instead"
+            );
+            tokio::spawn(async {
+                telemetry::shutdown_otel().await;
+            });
+        }
+    }
+
+    /// Shutdown the III client and flush all pending telemetry data.
+    ///
+    /// This method stops the connection loop and sends a shutdown signal.
+    /// When the `otel` feature is enabled, it additionally awaits the
+    /// OpenTelemetry flush, ensuring all spans, metrics, and logs are
+    /// exported before returning.
+    pub async fn shutdown_async(&self) {
+        self.inner.running.store(false, Ordering::SeqCst);
+        let _ = self.inner.outbound.send(Outbound::Shutdown);
+
+        #[cfg(feature = "otel")]
+        telemetry::shutdown_otel().await;
     }
 
     pub fn register_function<F, Fut>(&self, id: impl Into<String>, handler: F)
@@ -293,8 +386,7 @@ impl III {
 
         self.inner
             .functions
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .insert(message.id.clone(), data);
         let _ = self.send_message(message.to_message());
     }
@@ -309,8 +401,7 @@ impl III {
 
         self.inner
             .services
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .insert(message.id.clone(), message.clone());
         let _ = self.send_message(message.to_message());
     }
@@ -329,8 +420,7 @@ impl III {
 
         self.inner
             .services
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .insert(message.id.clone(), message.clone());
         let _ = self.send_message(message.to_message());
     }
@@ -348,7 +438,7 @@ impl III {
             description: description.into(),
         };
 
-        self.inner.trigger_types.lock().unwrap().insert(
+        self.inner.trigger_types.lock_or_recover().insert(
             message.id.clone(),
             RemoteTriggerTypeData {
                 message: message.clone(),
@@ -361,7 +451,7 @@ impl III {
 
     pub fn unregister_trigger_type(&self, id: impl Into<String>) {
         let id = id.into();
-        self.inner.trigger_types.lock().unwrap().remove(&id);
+        self.inner.trigger_types.lock_or_recover().remove(&id);
     }
 
     pub fn register_trigger(
@@ -381,8 +471,7 @@ impl III {
 
         self.inner
             .triggers
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .insert(message.id.clone(), message.clone());
         let _ = self.send_message(message.to_message());
 
@@ -390,7 +479,7 @@ impl III {
         let trigger_type = message.trigger_type.clone();
         let unregister_id = message.id.clone();
         let unregister_fn = Arc::new(move || {
-            let _ = iii.inner.triggers.lock().unwrap().remove(&unregister_id);
+            let _ = iii.inner.triggers.lock_or_recover().remove(&unregister_id);
             let msg = UnregisterTriggerMessage {
                 id: unregister_id.clone(),
                 trigger_type: trigger_type.clone(),
@@ -420,19 +509,26 @@ impl III {
         let invocation_id = Uuid::new_v4();
         let (tx, rx) = oneshot::channel();
 
-        self.inner.pending.lock().unwrap().insert(invocation_id, tx);
+        self.inner
+            .pending
+            .lock_or_recover()
+            .insert(invocation_id, tx);
+
+        let (tp, bg) = inject_trace_headers();
 
         self.send_message(Message::InvokeFunction {
             invocation_id: Some(invocation_id),
             function_id: function_id.to_string(),
             data,
+            traceparent: tp,
+            baggage: bg,
         })?;
 
         match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => Err(IIIError::NotConnected),
             Err(_) => {
-                self.inner.pending.lock().unwrap().remove(&invocation_id);
+                self.inner.pending.lock_or_recover().remove(&invocation_id);
                 Err(IIIError::Timeout)
             }
         }
@@ -443,10 +539,15 @@ impl III {
         TInput: Serialize,
     {
         let value = serde_json::to_value(data)?;
+
+        let (tp, bg) = inject_trace_headers();
+
         self.send_message(Message::InvokeFunction {
             invocation_id: None,
             function_id: function_id.to_string(),
             data: value,
+            traceparent: tp,
+            baggage: bg,
         })
     }
 
@@ -478,16 +579,15 @@ impl III {
 
         self.inner
             .functions_available_callbacks
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .insert(callback_id, callback);
 
         // Set up trigger if not already done
-        let mut trigger_guard = self.inner.functions_available_trigger.lock().unwrap();
+        let mut trigger_guard = self.inner.functions_available_trigger.lock_or_recover();
         if trigger_guard.is_none() {
             // Get or create function path (reuse existing if trigger registration previously failed)
             let function_id = {
-                let mut path_guard = self.inner.functions_available_function_id.lock().unwrap();
+                let mut path_guard = self.inner.functions_available_function_id.lock_or_recover();
                 if path_guard.is_none() {
                     let path = format!("iii.on_functions_available.{}", Uuid::new_v4());
                     *path_guard = Some(path.clone());
@@ -501,8 +601,7 @@ impl III {
             let function_exists = self
                 .inner
                 .functions
-                .lock()
-                .unwrap()
+                .lock_or_recover()
                 .contains_key(&function_id);
             if !function_exists {
                 let iii = self.clone();
@@ -517,7 +616,7 @@ impl III {
                             })
                             .unwrap_or_default();
 
-                        let callbacks = iii.inner.functions_available_callbacks.lock().unwrap();
+                        let callbacks = iii.inner.functions_available_callbacks.lock_or_recover();
                         for cb in callbacks.values() {
                             cb(functions.clone());
                         }
@@ -577,7 +676,7 @@ impl III {
 
     /// Register this worker's metadata with the engine (called automatically on connect)
     fn register_worker_metadata(&self) {
-        if let Some(metadata) = self.inner.worker_metadata.lock().unwrap().clone() {
+        if let Some(metadata) = self.inner.worker_metadata.lock_or_recover().clone() {
             let _ = self.call_void("engine.workers.register", metadata);
         }
     }
@@ -669,19 +768,19 @@ impl III {
     fn collect_registrations(&self) -> Vec<Message> {
         let mut messages = Vec::new();
 
-        for trigger_type in self.inner.trigger_types.lock().unwrap().values() {
+        for trigger_type in self.inner.trigger_types.lock_or_recover().values() {
             messages.push(trigger_type.message.to_message());
         }
 
-        for service in self.inner.services.lock().unwrap().values() {
+        for service in self.inner.services.lock_or_recover().values() {
             messages.push(service.to_message());
         }
 
-        for function in self.inner.functions.lock().unwrap().values() {
+        for function in self.inner.functions.lock_or_recover().values() {
             messages.push(function.message.to_message());
         }
 
-        for trigger in self.inner.triggers.lock().unwrap().values() {
+        for trigger in self.inner.triggers.lock_or_recover().values() {
             messages.push(trigger.to_message());
         }
 
@@ -737,7 +836,7 @@ impl III {
 
     async fn send_ws(&self, ws_tx: &mut WsTx, message: &Message) -> Result<(), IIIError> {
         let payload = serde_json::to_string(message)?;
-        ws_tx.send(WsMessage::Text(payload)).await?;
+        ws_tx.send(WsMessage::Text(payload.into())).await?;
         Ok(())
     }
 
@@ -768,8 +867,10 @@ impl III {
                 invocation_id,
                 function_id,
                 data,
+                traceparent,
+                baggage,
             } => {
-                self.handle_invoke_function(invocation_id, function_id, data);
+                self.handle_invoke_function(invocation_id, function_id, data, traceparent, baggage);
             }
             Message::RegisterTrigger {
                 id,
@@ -781,6 +882,9 @@ impl III {
             }
             Message::Ping => {
                 let _ = self.send_message(Message::Pong);
+            }
+            Message::WorkerRegistered { worker_id } => {
+                tracing::debug!(worker_id = %worker_id, "Worker registered");
             }
             _ => {}
         }
@@ -794,7 +898,7 @@ impl III {
         result: Option<Value>,
         error: Option<ErrorBody>,
     ) {
-        let sender = self.inner.pending.lock().unwrap().remove(&invocation_id);
+        let sender = self.inner.pending.lock_or_recover().remove(&invocation_id);
         if let Some(sender) = sender {
             let result = match error {
                 Some(error) => Err(IIIError::Remote {
@@ -812,14 +916,15 @@ impl III {
         invocation_id: Option<Uuid>,
         function_id: String,
         data: Value,
+        traceparent: Option<String>,
+        baggage: Option<String>,
     ) {
-        tracing::debug!(function_id = %function_id, "Invoking function");
+        tracing::debug!(function_id = %function_id, traceparent = ?traceparent, baggage = ?baggage, "Invoking function");
 
         let handler = self
             .inner
             .functions
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .get(&function_id)
             .map(|data| data.handler.clone());
 
@@ -827,6 +932,8 @@ impl III {
             tracing::warn!(function_id = %function_id, "Invocation: Function not found");
 
             if let Some(invocation_id) = invocation_id {
+                let (resp_tp, resp_bg) = inject_trace_headers();
+
                 let error = ErrorBody {
                     code: "function_not_found".to_string(),
                     message: "Function not found".to_string(),
@@ -836,6 +943,8 @@ impl III {
                     function_id,
                     result: None,
                     error: Some(error),
+                    traceparent: resp_tp,
+                    baggage: resp_bg,
                 });
 
                 if let Err(err) = result {
@@ -848,15 +957,65 @@ impl III {
         let iii = self.clone();
 
         tokio::spawn(async move {
+            // Extract incoming trace context and create a span for this invocation.
+            // This ensures the handler and any outbound calls it makes (e.g.
+            // invoke_function_with_timeout) are linked as children of the caller's trace.
+            // We use FutureExt::with_context() instead of cx.attach() because
+            // ContextGuard is !Send and can't be held across .await in tokio::spawn.
+            #[cfg(feature = "otel")]
+            let otel_cx = {
+                use crate::telemetry::context::extract_context;
+                use opentelemetry::trace::{SpanKind, TraceContextExt, Tracer};
+
+                let parent_cx = extract_context(traceparent.as_deref(), baggage.as_deref());
+                let tracer = opentelemetry::global::tracer("iii-rust-sdk");
+                let span = tracer
+                    .span_builder(format!("invoke {}", function_id))
+                    .with_kind(SpanKind::Server)
+                    .start_with_context(&tracer, &parent_cx);
+                parent_cx.with_span(span)
+            };
+
+            #[cfg(feature = "otel")]
+            let result = {
+                use opentelemetry::trace::FutureExt as OtelFutureExt;
+                handler(data).with_context(otel_cx.clone()).await
+            };
+
+            #[cfg(not(feature = "otel"))]
             let result = handler(data).await;
 
+            // Record span status based on result
+            #[cfg(feature = "otel")]
+            {
+                use opentelemetry::trace::{Status, TraceContextExt};
+                let span = otel_cx.span();
+                match &result {
+                    Ok(_) => span.set_status(Status::Ok),
+                    Err(err) => span.set_status(Status::error(err.to_string())),
+                }
+            }
+
             if let Some(invocation_id) = invocation_id {
+                // Inject trace context from our span into the response.
+                // We briefly attach the otel context (no .await crossing)
+                // so inject_traceparent/inject_baggage can read it.
+                #[cfg(feature = "otel")]
+                let (resp_tp, resp_bg) = {
+                    let _guard = otel_cx.attach();
+                    inject_trace_headers()
+                };
+                #[cfg(not(feature = "otel"))]
+                let (resp_tp, resp_bg) = inject_trace_headers();
+
                 let message = match result {
                     Ok(value) => Message::InvocationResult {
                         invocation_id,
                         function_id,
                         result: Some(value),
                         error: None,
+                        traceparent: resp_tp,
+                        baggage: resp_bg,
                     },
                     Err(err) => Message::InvocationResult {
                         invocation_id,
@@ -866,6 +1025,8 @@ impl III {
                             code: "invocation_failed".to_string(),
                             message: err.to_string(),
                         }),
+                        traceparent: resp_tp,
+                        baggage: resp_bg,
                     },
                 };
 
@@ -886,8 +1047,7 @@ impl III {
         let handler = self
             .inner
             .trigger_types
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .get(&trigger_type)
             .map(|data| data.handler.clone());
 

@@ -454,7 +454,7 @@ class III:
         - {stream_name}.set
         - {stream_name}.delete
         - {stream_name}.list
-        - {stream_name}.listGroups
+        - {stream_name}.list_groups
         - {stream_name}.update
 
         Args:
@@ -497,5 +497,5 @@ class III:
         self.register_function(f"{stream_name}.set", set_handler)
         self.register_function(f"{stream_name}.delete", delete_handler)
         self.register_function(f"{stream_name}.list", list_handler)
-        self.register_function(f"{stream_name}.listGroups", list_groups_handler)
+        self.register_function(f"{stream_name}.list_groups", list_groups_handler)
         self.register_function(f"{stream_name}.update", update_handler)

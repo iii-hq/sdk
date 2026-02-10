@@ -298,7 +298,7 @@ class Sdk implements ISdk {
     this.registerFunction({ id: `stream.delete(${streamName})` }, stream.delete.bind(stream))
     this.registerFunction({ id: `stream.list(${streamName})` }, stream.list.bind(stream))
     this.registerFunction(
-      { id: `stream.listGroups(${streamName})` },
+      { id: `stream.list_groups(${streamName})` },
       stream.listGroups.bind(stream),
     )
   }

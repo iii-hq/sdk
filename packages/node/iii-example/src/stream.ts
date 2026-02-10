@@ -15,7 +15,7 @@ export const streams = {
     return iii.call('stream.list', { stream_name, group_id })
   },
   listGroups: async (stream_name: string): Promise<string[]> => {
-    return iii.call('stream.listGroups', { stream_name })
+    return iii.call('stream.list_groups', { stream_name })
   },
 }
 

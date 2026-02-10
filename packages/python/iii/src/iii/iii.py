@@ -13,7 +13,8 @@ from typing import Any, Awaitable, Callable, Coroutine, cast
 import websockets
 from websockets.asyncio.client import ClientConnection
 
-from .bridge_types import (
+from .context import Context, with_context
+from .iii_types import (
     FunctionInfo,
     InvocationResultMessage,
     InvokeFunctionMessage,
@@ -26,7 +27,6 @@ from .bridge_types import (
     UnregisterTriggerTypeMessage,
     WorkerInfo,
 )
-from .context import Context, with_context
 from .logger import Logger
 from .stream import IStream
 from .triggers import Trigger, TriggerConfig, TriggerHandler
@@ -34,7 +34,7 @@ from .types import RemoteFunctionData, RemoteTriggerTypeData
 
 RemoteFunctionHandler = Callable[[Any], Awaitable[Any]]
 
-log = logging.getLogger("iii.bridge")
+log = logging.getLogger("iii.iii")
 
 
 @dataclass
@@ -45,7 +45,7 @@ class InitOptions:
 
 
 class III:
-    """WebSocket bridge for communication with the III Engine."""
+    """WebSocket client for communication with the III Engine."""
 
     def __init__(self, address: str, options: InitOptions | None = None) -> None:
         self._address = address
@@ -404,7 +404,7 @@ class III:
 
         if not self._functions_available_trigger:
             if not self._functions_available_function_id:
-                self._functions_available_function_id = f"bridge.on_functions_available.{uuid.uuid4()}"
+                self._functions_available_function_id = f"iii.on_functions_available.{uuid.uuid4()}"
 
             function_id = self._functions_available_function_id
             if function_id not in self._functions:

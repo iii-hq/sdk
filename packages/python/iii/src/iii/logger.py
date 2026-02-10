@@ -23,7 +23,7 @@ LoggerInvoker = Callable[[str, dict[str, Any]], None]
 
 
 class Logger:
-    """Logger that sends log messages through the bridge."""
+    """Logger that sends log messages through the iii engine."""
 
     def __init__(
         self,

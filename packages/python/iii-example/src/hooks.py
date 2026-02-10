@@ -2,7 +2,7 @@ from typing import Any, Awaitable, Callable
 
 from iii import ApiRequest, ApiResponse, FunctionInfo, get_context
 
-from .bridge import bridge
+from .iii import iii
 
 
 def use_api(
@@ -19,8 +19,8 @@ def use_api(
         result = await handler(req, ctx)
         return result.model_dump(by_alias=True)
 
-    bridge.register_function(function_id, wrapped)
-    bridge.register_trigger(
+    iii.register_function(function_id, wrapped)
+    iii.register_trigger(
         trigger_type="api",
         function_id=function_id,
         config={
@@ -33,4 +33,4 @@ def use_api(
 
 
 def use_functions_available(callback: Callable[[list[FunctionInfo]], None]) -> Callable[[], None]:
-    return bridge.on_functions_available(callback)
+    return iii.on_functions_available(callback)

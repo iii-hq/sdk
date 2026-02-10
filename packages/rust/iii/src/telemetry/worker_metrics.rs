@@ -1,6 +1,6 @@
-use sysinfo::{Pid, ProcessesToUpdate, System};
 use std::sync::Mutex;
 use std::time::Instant;
+use sysinfo::{Pid, ProcessesToUpdate, System};
 
 /// Collected worker metrics snapshot
 #[derive(Debug, Clone)]

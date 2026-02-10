@@ -178,7 +178,11 @@ pub struct FunctionsAvailableGuard {
 
 impl Drop for FunctionsAvailableGuard {
     fn drop(&mut self) {
-        let mut callbacks = self.iii.inner.functions_available_callbacks.lock_or_recover();
+        let mut callbacks = self
+            .iii
+            .inner
+            .functions_available_callbacks
+            .lock_or_recover();
         callbacks.remove(&self.callback_id);
 
         if callbacks.is_empty() {
@@ -285,7 +289,9 @@ impl III {
         // Shutdown OpenTelemetry (best-effort, does not wait for flush)
         #[cfg(feature = "otel")]
         {
-            tracing::warn!("shutdown() does not await telemetry flush; use shutdown_async() instead");
+            tracing::warn!(
+                "shutdown() does not await telemetry flush; use shutdown_async() instead"
+            );
             tokio::spawn(async {
                 telemetry::shutdown_otel().await;
             });
@@ -503,7 +509,10 @@ impl III {
         let invocation_id = Uuid::new_v4();
         let (tx, rx) = oneshot::channel();
 
-        self.inner.pending.lock_or_recover().insert(invocation_id, tx);
+        self.inner
+            .pending
+            .lock_or_recover()
+            .insert(invocation_id, tx);
 
         let (tp, bg) = inject_trace_headers();
 
@@ -956,7 +965,7 @@ impl III {
             #[cfg(feature = "otel")]
             let otel_cx = {
                 use crate::telemetry::context::extract_context;
-                use opentelemetry::trace::{TraceContextExt, Tracer, SpanKind};
+                use opentelemetry::trace::{SpanKind, TraceContextExt, Tracer};
 
                 let parent_cx = extract_context(traceparent.as_deref(), baggage.as_deref());
                 let tracer = opentelemetry::global::tracer("iii-rust-sdk");
@@ -979,7 +988,7 @@ impl III {
             // Record span status based on result
             #[cfg(feature = "otel")]
             {
-                use opentelemetry::trace::{TraceContextExt, Status};
+                use opentelemetry::trace::{Status, TraceContextExt};
                 let span = otel_cx.span();
                 match &result {
                     Ok(_) => span.set_status(Status::Ok),

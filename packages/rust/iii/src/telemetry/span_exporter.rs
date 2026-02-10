@@ -3,9 +3,9 @@ use super::types::PREFIX_TRACES;
 use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
 use opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema;
 use opentelemetry_proto::transform::trace::tonic::group_spans_by_resource_and_scope;
+use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::error::OTelSdkResult;
 use opentelemetry_sdk::trace::{SpanData, SpanExporter};
-use opentelemetry_sdk::Resource;
 use std::fmt;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -35,14 +35,23 @@ impl fmt::Debug for EngineSpanExporter {
 }
 
 impl SpanExporter for EngineSpanExporter {
-    fn export(&self, batch: Vec<SpanData>) -> impl futures_util::Future<Output = OTelSdkResult> + Send {
+    fn export(
+        &self,
+        batch: Vec<SpanData>,
+    ) -> impl futures_util::Future<Output = OTelSdkResult> + Send {
         let is_empty = batch.is_empty();
 
-        let resource = self.resource.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
+        let resource = self
+            .resource
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
             .map(ResourceAttributesWithSchema::from)
-            .unwrap_or_else(|| ResourceAttributesWithSchema::from(
-                EMPTY_RESOURCE.get_or_init(|| Resource::builder_empty().build())
-            ));
+            .unwrap_or_else(|| {
+                ResourceAttributesWithSchema::from(
+                    EMPTY_RESOURCE.get_or_init(|| Resource::builder_empty().build()),
+                )
+            });
 
         let resource_spans = if is_empty {
             vec![]
@@ -58,8 +67,9 @@ impl SpanExporter for EngineSpanExporter {
                 return Ok(());
             }
 
-            let json = serde_json::to_vec(&request)
-                .map_err(|e| opentelemetry_sdk::error::OTelSdkError::InternalFailure(e.to_string()))?;
+            let json = serde_json::to_vec(&request).map_err(|e| {
+                opentelemetry_sdk::error::OTelSdkError::InternalFailure(e.to_string())
+            })?;
             connection
                 .send(PREFIX_TRACES, json)
                 .map_err(opentelemetry_sdk::error::OTelSdkError::InternalFailure)

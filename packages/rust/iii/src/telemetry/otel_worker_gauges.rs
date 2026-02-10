@@ -1,5 +1,5 @@
-use opentelemetry::metrics::Meter;
 use opentelemetry::KeyValue;
+use opentelemetry::metrics::Meter;
 use std::sync::Arc;
 
 use super::worker_metrics::WorkerMetricsCollector;

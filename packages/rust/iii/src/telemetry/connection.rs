@@ -1,7 +1,7 @@
 use super::types::{ConnectionState, ReconnectionConfig};
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info, warn};
 
@@ -26,7 +26,11 @@ impl SharedEngineConnection {
     }
 
     /// Create a new shared connection with a custom channel capacity
-    pub fn with_channel_capacity(ws_url: String, config: ReconnectionConfig, channel_capacity: usize) -> Self {
+    pub fn with_channel_capacity(
+        ws_url: String,
+        config: ReconnectionConfig,
+        channel_capacity: usize,
+    ) -> Self {
         let (tx, rx) = mpsc::channel(channel_capacity);
         let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
         let (flush_tx, flush_rx) = mpsc::channel(16);

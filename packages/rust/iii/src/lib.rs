@@ -28,15 +28,15 @@ pub use serde_json::Value;
 // OpenTelemetry re-exports (behind "otel" feature flag)
 #[cfg(feature = "otel")]
 pub use telemetry::{
-    init_otel, shutdown_otel, flush_otel, with_span, get_tracer, get_meter, is_initialized,
+    context::{
+        current_span_id, current_trace_id, extract_baggage, extract_context, extract_traceparent,
+        get_all_baggage, get_baggage_entry, inject_baggage, inject_traceparent,
+        remove_baggage_entry, set_baggage_entry,
+    },
+    flush_otel, get_meter, get_tracer, init_otel, is_initialized, shutdown_otel,
     types::OtelConfig,
     types::ReconnectionConfig,
-    context::{
-        current_trace_id, current_span_id,
-        inject_traceparent, extract_traceparent,
-        inject_baggage, extract_baggage, extract_context,
-        get_baggage_entry, set_baggage_entry, remove_baggage_entry, get_all_baggage,
-    },
+    with_span,
 };
 
 // Re-export commonly used OpenTelemetry types for convenience

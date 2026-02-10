@@ -3,9 +3,9 @@ use super::types::PREFIX_LOGS;
 use opentelemetry_proto::tonic::collector::logs::v1::ExportLogsServiceRequest;
 use opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema;
 use opentelemetry_proto::transform::logs::tonic::group_logs_by_resource_and_scope;
+use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::error::OTelSdkResult;
 use opentelemetry_sdk::logs::{LogBatch, LogExporter};
-use opentelemetry_sdk::Resource;
 use std::fmt;
 use std::sync::{Arc, Mutex};
 

@@ -3,9 +3,9 @@
 //! This module provides functions for working with W3C trace context and baggage headers,
 //! enabling distributed tracing across service boundaries.
 
+use opentelemetry::baggage::BaggageExt;
 use opentelemetry::propagation::{Extractor, Injector, TextMapPropagator};
 use opentelemetry::trace::TraceContextExt;
-use opentelemetry::baggage::BaggageExt;
 use opentelemetry::{Context as OtelContext, KeyValue};
 use opentelemetry_sdk::propagation::{BaggagePropagator, TraceContextPropagator};
 use std::collections::HashMap;
@@ -80,7 +80,9 @@ pub fn inject_traceparent() -> Option<String> {
 /// Extract trace context from a W3C traceparent header string
 pub fn extract_traceparent(traceparent: &str) -> OtelContext {
     let mut carrier = HeaderMap(HashMap::new());
-    carrier.0.insert("traceparent".to_string(), traceparent.to_string());
+    carrier
+        .0
+        .insert("traceparent".to_string(), traceparent.to_string());
 
     trace_propagator().extract(&carrier)
 }
@@ -125,9 +127,7 @@ pub fn extract_context(traceparent: Option<&str>, baggage: Option<&str>) -> Otel
 /// Get a baggage entry from the current context
 pub fn get_baggage_entry(key: &str) -> Option<String> {
     let cx = OtelContext::current();
-    cx.baggage()
-        .get(key)
-        .map(|value| value.to_string())
+    cx.baggage().get(key).map(|value| value.to_string())
 }
 
 /// Set a baggage entry in the current context (returns new context)
@@ -175,7 +175,7 @@ pub fn get_all_baggage() -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use opentelemetry::trace::{SpanContext, SpanId, TraceId, TraceFlags};
+    use opentelemetry::trace::{SpanContext, SpanId, TraceFlags, TraceId};
 
     #[test]
     fn test_inject_extract_traceparent() {
@@ -213,7 +213,10 @@ mod tests {
         let span = cx.span();
         let span_context = span.span_context();
         assert!(span_context.is_valid());
-        assert_eq!(span_context.trace_id().to_string(), "4bf92f3577b34da6a3ce929d0e0e4736");
+        assert_eq!(
+            span_context.trace_id().to_string(),
+            "4bf92f3577b34da6a3ce929d0e0e4736"
+        );
         assert_eq!(span_context.span_id().to_string(), "00f067aa0ba902b7");
     }
 

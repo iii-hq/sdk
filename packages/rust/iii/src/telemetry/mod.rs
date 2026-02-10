@@ -1,23 +1,23 @@
-pub mod types;
 pub mod connection;
 pub mod context;
-pub mod span_exporter;
-pub mod metrics_exporter;
 pub mod log_exporter;
-pub mod worker_metrics;
+pub mod metrics_exporter;
 pub mod otel_worker_gauges;
+pub mod span_exporter;
+pub mod types;
+pub mod worker_metrics;
 
-use std::sync::{Arc, OnceLock};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
-use opentelemetry::trace::{Tracer, SpanKind, Status, TraceContextExt};
+use opentelemetry::propagation::TextMapCompositePropagator;
+use opentelemetry::trace::{SpanKind, Status, TraceContextExt, Tracer};
 use opentelemetry::{Context as OtelContext, KeyValue};
+use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use opentelemetry_sdk::propagation::{BaggagePropagator, TraceContextPropagator};
 use opentelemetry_sdk::trace::SdkTracerProvider;
-use opentelemetry_sdk::Resource;
-use opentelemetry::propagation::TextMapCompositePropagator;
 use tokio::sync::Mutex;
 
 use self::connection::SharedEngineConnection;
@@ -103,9 +103,7 @@ pub async fn init_otel(config: OtelConfig) {
         resource_attrs.push(KeyValue::new("service.namespace", ns));
     }
 
-    let resource = Resource::builder()
-        .with_attributes(resource_attrs)
-        .build();
+    let resource = Resource::builder().with_attributes(resource_attrs).build();
 
     // Create shared WebSocket connection
     let channel_capacity = config.channel_capacity.unwrap_or(10_000);
@@ -164,9 +162,8 @@ pub async fn init_otel(config: OtelConfig) {
         None
     };
 
-    let shutdown_timeout = std::time::Duration::from_millis(
-        config.shutdown_timeout_ms.unwrap_or(10_000),
-    );
+    let shutdown_timeout =
+        std::time::Duration::from_millis(config.shutdown_timeout_ms.unwrap_or(10_000));
 
     let otel_state = OtelState {
         tracer_provider,

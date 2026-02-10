@@ -2,9 +2,9 @@ use super::connection::SharedEngineConnection;
 use super::types::PREFIX_METRICS;
 use opentelemetry_proto::tonic::collector::metrics::v1::ExportMetricsServiceRequest;
 use opentelemetry_sdk::error::OTelSdkResult;
+use opentelemetry_sdk::metrics::Temporality;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
-use opentelemetry_sdk::metrics::Temporality;
 use std::fmt;
 use std::sync::Arc;
 
@@ -26,12 +26,16 @@ impl fmt::Debug for EngineMetricsExporter {
 }
 
 impl PushMetricExporter for EngineMetricsExporter {
-    fn export(&self, metrics: &ResourceMetrics) -> impl std::future::Future<Output = OTelSdkResult> + Send {
+    fn export(
+        &self,
+        metrics: &ResourceMetrics,
+    ) -> impl std::future::Future<Output = OTelSdkResult> + Send {
         let request = ExportMetricsServiceRequest::from(metrics);
         let connection = self.connection.clone();
         async move {
-            let json = serde_json::to_vec(&request)
-                .map_err(|e| opentelemetry_sdk::error::OTelSdkError::InternalFailure(e.to_string()))?;
+            let json = serde_json::to_vec(&request).map_err(|e| {
+                opentelemetry_sdk::error::OTelSdkError::InternalFailure(e.to_string())
+            })?;
             connection
                 .send(PREFIX_METRICS, json)
                 .map_err(opentelemetry_sdk::error::OTelSdkError::InternalFailure)

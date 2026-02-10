@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, List, TypeVar
 
 from pydantic import BaseModel
 
@@ -161,7 +161,7 @@ class IStream(ABC, Generic[TData]):
         ...
 
     @abstractmethod
-    async def list_groups(self, input: StreamListGroupsInput) -> list[str]:
+    async def list_groups(self, input: StreamListGroupsInput) -> List[str]:
         """List all groups in the stream."""
         ...
 

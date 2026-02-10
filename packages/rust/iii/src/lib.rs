@@ -3,9 +3,9 @@ pub mod error;
 pub mod iii;
 pub mod logger;
 pub mod protocol;
+pub mod stream;
 #[cfg(feature = "otel")]
 pub mod telemetry;
-pub mod stream;
 pub mod triggers;
 pub mod types;
 

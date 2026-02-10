@@ -5,7 +5,7 @@ from typing import Any, Awaitable, Callable, Generic, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .bridge_types import FunctionInfo, RegisterFunctionMessage, RegisterTriggerMessage, RegisterTriggerTypeMessage
+from .iii_types import FunctionInfo, RegisterFunctionMessage, RegisterTriggerMessage, RegisterTriggerTypeMessage
 from .stream import IStream
 from .triggers import Trigger, TriggerHandler
 

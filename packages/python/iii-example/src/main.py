@@ -132,10 +132,10 @@ async def _get_state(req: ApiRequest, ctx) -> ApiResponse:
 
 
 async def _async_main() -> None:
-    from .bridge import bridge
+    from .iii import iii
 
     _setup()
-    await bridge.connect()
+    await iii.connect()
 
     while True:
         await asyncio.sleep(60)

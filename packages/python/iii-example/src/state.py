@@ -1,20 +1,20 @@
 from typing import Any
 
-from .bridge import bridge
+from .iii import iii
 
 
 class State:
     async def get(self, group_id: str, item_id: str) -> Any | None:
-        return await bridge.call("state.get", {"group_id": group_id, "item_id": item_id})
+        return await iii.call("state.get", {"group_id": group_id, "item_id": item_id})
 
     async def set(self, group_id: str, item_id: str, data: Any) -> Any:
-        return await bridge.call("state.set", {"group_id": group_id, "item_id": item_id, "data": data})
+        return await iii.call("state.set", {"group_id": group_id, "item_id": item_id, "data": data})
 
     async def delete(self, group_id: str, item_id: str) -> None:
-        return await bridge.call("state.delete", {"group_id": group_id, "item_id": item_id})
+        return await iii.call("state.delete", {"group_id": group_id, "item_id": item_id})
 
     async def get_group(self, group_id: str) -> list[Any]:
-        return await bridge.call("state.list", {"group_id": group_id})
+        return await iii.call("state.list", {"group_id": group_id})
 
 
 state = State()

@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-import iii.bridge as bridge_module
+import iii.iii as iii_module
 from iii import III
 
 
@@ -42,7 +42,7 @@ async def test_preconnect_registration_sent_once(monkeypatch: pytest.MonkeyPatch
         connect_calls += 1
         return ws
 
-    monkeypatch.setattr(bridge_module.websockets, "connect", fake_connect)
+    monkeypatch.setattr(iii_module.websockets, "connect", fake_connect)
 
     client = III("ws://fake")
     client._register_worker_metadata = lambda: None
@@ -78,7 +78,7 @@ async def test_reconnect_replays_durable_state_once_per_connection(
         sockets.append(ws)
         return ws
 
-    monkeypatch.setattr(bridge_module.websockets, "connect", fake_connect)
+    monkeypatch.setattr(iii_module.websockets, "connect", fake_connect)
 
     client = III("ws://fake")
     client._register_worker_metadata = lambda: None
@@ -124,7 +124,7 @@ async def test_call_void_queued_while_disconnected_flushes_after_connect(
     async def fake_connect(_addr: str) -> FakeWebSocket:
         return ws
 
-    monkeypatch.setattr(bridge_module.websockets, "connect", fake_connect)
+    monkeypatch.setattr(iii_module.websockets, "connect", fake_connect)
 
     client = III("ws://fake")
     client._register_worker_metadata = lambda: None

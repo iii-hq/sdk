@@ -2,9 +2,9 @@
 
 import logging
 
-from .bridge import III, InitOptions
-from .bridge_types import FunctionInfo, WorkerInfo, WorkerStatus
 from .context import Context, get_context, with_context
+from .iii import III, InitOptions
+from .iii_types import FunctionInfo, WorkerInfo, WorkerStatus
 from .logger import Logger
 from .stream import (
     IStream,

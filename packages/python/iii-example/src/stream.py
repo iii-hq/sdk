@@ -13,33 +13,33 @@ from iii import (
     StreamUpdateInput,
 )
 
-from .bridge import bridge
+from .iii import iii
 from .models import Todo
 
 
 class StreamClient:
     async def get(self, stream_name: str, group_id: str, item_id: str) -> Any | None:
-        return await bridge.call(
+        return await iii.call(
             "stream.get", {"stream_name": stream_name, "group_id": group_id, "item_id": item_id}
         )
 
     async def set(self, stream_name: str, group_id: str, item_id: str, data: Any) -> Any:
-        return await bridge.call(
+        return await iii.call(
             "stream.set", {"stream_name": stream_name, "group_id": group_id, "item_id": item_id, "data": data}
         )
 
     async def delete(self, stream_name: str, group_id: str, item_id: str) -> None:
-        return await bridge.call(
+        return await iii.call(
             "stream.delete", {"stream_name": stream_name, "group_id": group_id, "item_id": item_id}
         )
 
     async def get_group(self, stream_name: str, group_id: str) -> list[Any]:
-        return await bridge.call(
+        return await iii.call(
             "stream.list", {"stream_name": stream_name, "group_id": group_id}
         )
 
     async def list_groups(self, stream_name: str) -> list[str]:
-        return await bridge.call("stream.list_groups", {"stream_name": stream_name})
+        return await iii.call("stream.list_groups", {"stream_name": stream_name})
 
 
 class TodoStream(IStream[dict[str, Any]]):
@@ -84,4 +84,4 @@ class TodoStream(IStream[dict[str, Any]]):
 
 streams = StreamClient()
 
-bridge.create_stream("todo", TodoStream())
+iii.create_stream("todo", TodoStream())

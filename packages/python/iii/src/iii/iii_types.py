@@ -1,4 +1,4 @@
-"""Bridge message types."""
+"""III message types."""
 
 from enum import Enum
 from typing import Any, Literal
@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class MessageType(str, Enum):
-    """Message types for bridge communication."""
+    """Message types for III communication."""
 
     REGISTER_FUNCTION = "registerfunction"
     REGISTER_SERVICE = "registerservice"
@@ -154,7 +154,7 @@ class WorkerInfo(BaseModel):
     active_invocations: int
 
 
-BridgeMessage = (
+IIIMessage = (
     RegisterFunctionMessage
     | InvokeFunctionMessage
     | InvocationResultMessage

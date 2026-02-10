@@ -112,7 +112,7 @@ jobs:
         working-directory: .
         run: |
           echo "### Version Information" >> $GITHUB_STEP_SUMMARY
-          echo "- **Package:** @iii-dev/sdk" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package:** iii-sdk" >> $GITHUB_STEP_SUMMARY
           echo "- **Current version:** ${{ steps.current_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **New version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **NPM distribution tag:** ${{ github.event.inputs.tag }}" >> $GITHUB_STEP_SUMMARY
@@ -120,8 +120,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Installation" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "npm install @iii-dev/sdk@${{ github.event.inputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "npm install @iii-dev/sdk@${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "npm install iii-sdk@${{ github.event.inputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "npm install iii-sdk@${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Build SDK
@@ -137,4 +137,4 @@ jobs:
       - name: Publish package with custom tag
         working-directory: .
         run: |
-          pnpm publish -r --filter @iii-dev/sdk --no-git-checks --tag ${{ github.event.inputs.tag }}
+          pnpm publish -r --filter iii-sdk --no-git-checks --tag ${{ github.event.inputs.tag }}

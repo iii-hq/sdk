@@ -1,4 +1,4 @@
-// import { iii } from '@iii-dev/sdk'
+// import { iii } from 'iii-sdk'
 import { init } from '../src/index'
 
 const ENGINE_WS_URL = process.env.III_BRIDGE_URL ?? 'ws://localhost:49134'

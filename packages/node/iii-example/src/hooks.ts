@@ -6,7 +6,7 @@ import {
   getContext,
   type LogCallback,
   type LogConfig,
-} from '@iii-dev/sdk'
+} from 'iii-sdk'
 import { iii } from './iii'
 
 export const useApi = (

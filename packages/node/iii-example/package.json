@@ -7,7 +7,7 @@
     "dev": "bun src/index.ts"
   },
   "dependencies": {
-    "@iii-dev/sdk": "workspace:*"
+    "iii-sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

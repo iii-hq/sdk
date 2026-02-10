@@ -133,7 +133,7 @@ jobs:
           if [ -z "$VERSION" ]; then exit 0; fi
           
           for i in 1 2 3 4 5; do
-            if npm view "@iii-dev/sdk@$VERSION" version 2>/dev/null; then
+            if npm view "iii-sdk@$VERSION" version 2>/dev/null; then
               echo "node_ok=true" >> $GITHUB_OUTPUT
               echo "Node SDK $VERSION found on npm"
               exit 0

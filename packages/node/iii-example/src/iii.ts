@@ -1,4 +1,4 @@
-import { init } from '@iii-dev/sdk'
+import { init } from 'iii-sdk'
 import { version } from '../package.json'
 
 // Engine WebSocket URL - used for both III and telemetry

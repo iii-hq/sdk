@@ -3,13 +3,13 @@
 ## Installation
 
 ```bash
-npm install @iii-dev/sdk
+npm install iii-sdk
 ```
 
 ## Usage
 
 ```javascript
-import { III } from '@iii-dev/sdk'
+import { III } from 'iii-sdk'
 
 /**
  * Make sure the III Core Instance is up and Running on the given URL.

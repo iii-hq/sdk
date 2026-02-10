@@ -1,4 +1,4 @@
-import { III } from '@iii-dev/sdk'
+import { III } from 'iii-sdk'
 
 /**
  * Test worker metrics reporting

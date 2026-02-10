@@ -27,11 +27,11 @@ The III SDK provides a unified interface for building distributed applications w
 ### Node.js
 
 ```bash
-npm install @iii-dev/sdk
+npm install iii-sdk
 ```
 
 ```javascript
-import { III } from '@iii-dev/sdk'
+import { III } from 'iii-sdk'
 
 const iii = new III('ws://localhost:49134')
 

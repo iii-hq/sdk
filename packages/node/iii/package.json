@@ -1,15 +1,16 @@
 {
-  "name": "@iii-dev/sdk",
+  "name": "iii-sdk",
   "version": "0.3.0",
   "private": false,
   "publishConfig": {
     "access": "private"
   },
   "main": "index.js",
-  "author": "Motia LLC",
+  "author": "III",
   "license": "Apache-2.0",
   "type": "module",
-  "description": "III Core",
+  "description": "III SDK for Node.js",
+  "keywords": ["iii", "sdk"],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",

@@ -77,14 +77,14 @@ jobs:
         run: npx @biomejs/biome check packages/node
 
       - name: Type check
-        run: pnpm --filter @iii-dev/sdk exec tsc --noEmit
+        run: pnpm --filter iii-sdk exec tsc --noEmit
 
       - name: Test
         if: false
         env:
           III_BRIDGE_URL: ws://localhost:49134
           III_HTTP_URL: http://localhost:3111
-        run: pnpm --filter @iii-dev/sdk test
+        run: pnpm --filter iii-sdk test
 
       - name: Stop III Engine
         if: always() && steps.engine.outputs.engine-available == 'true'

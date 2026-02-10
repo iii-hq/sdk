@@ -173,6 +173,30 @@ Hooks run automatically on `git commit` and only process staged files. To bypass
 
 ## Release Process
 
+```mermaid
+flowchart TD
+  Start["Run create-tag.yml"] --> Inputs["Select: version_type + pre_release"]
+  Inputs --> FetchStable["Get latest stable tag\n(filter out pre-release)"]
+  FetchStable --> Bump["Apply bump\n(patch/minor/major)"]
+  Bump --> CheckPre{pre_release?}
+  CheckPre -->|none| StableVer["v0.1.1"]
+  CheckPre -->|alpha| AlphaVer["v0.1.1-alpha"]
+  CheckPre -->|beta| BetaVer["v0.1.1-beta"]
+  CheckPre -->|rc| RcVer["v0.1.1-rc"]
+  StableVer --> TagExists{Tag exists?}
+  AlphaVer --> TagExists
+  BetaVer --> TagExists
+  RcVer --> TagExists
+  TagExists -->|yes| Fail["Error: tag already exists"]
+  TagExists -->|no| UpdateFiles["Update version files\nCommit + Tag + Push"]
+  UpdateFiles --> Release["release.yml triggers"]
+  Release --> DetectPre["Detect pre-release from tag"]
+  DetectPre --> GHRelease["GitHub Release\n(prerelease flag set)"]
+  DetectPre --> NpmPublish["npm publish --tag alpha/beta/rc/latest"]
+  DetectPre --> PyPI["PyPI publish\n(auto-detected as pre-release)"]
+  DetectPre --> Crates["crates.io publish\n(semver handles it)"]
+```
+
 1. **Create Tag:** Run `create-tag.yml` workflow manually
    - Choose version bump type (patch/minor/major) or provide custom version
    - Workflow creates and pushes the tag

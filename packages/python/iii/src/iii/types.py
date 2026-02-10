@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable, Generic, Protocol, TypeVar
 from pydantic import BaseModel, ConfigDict, Field
 
 from .bridge_types import FunctionInfo, RegisterFunctionMessage, RegisterTriggerMessage, RegisterTriggerTypeMessage
-from .streams import IStream
+from .stream import IStream
 from .triggers import Trigger, TriggerHandler
 
 TInput = TypeVar("TInput")

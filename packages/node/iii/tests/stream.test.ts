@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { skipIfServerUnavailable } from './setup'
 import { iii, sleep } from './utils'
-import type { StreamSetInput, StreamSetResult } from '../src/streams'
+import type { StreamSetInput, StreamSetResult } from '../src/stream'
 
 type TestData = {
   name?: string
@@ -16,7 +16,7 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
 
   beforeEach(async () => {
     await iii
-      .call('streams.delete', {
+      .call('stream.delete', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
@@ -24,7 +24,7 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
       .catch(() => void 0)
   })
 
-  describe('streams.set', () => {
+  describe('stream.set', () => {
     it('should set a new stream item', async () => {
       const testData = {
         name: 'Test Item',
@@ -32,7 +32,7 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
         metadata: { created: new Date().toISOString() },
       }
 
-      const result = await iii.call<StreamSetInput, StreamSetResult<TestData>>('streams.set', {
+      const result = await iii.call<StreamSetInput, StreamSetResult<TestData>>('stream.set', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
@@ -47,14 +47,14 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
       const initialData: TestData = { value: 1 }
       const updatedData: TestData = { value: 2, updated: true }
 
-      await iii.call('streams.set', {
+      await iii.call('stream.set', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
         data: initialData,
       })
 
-      const result: StreamSetResult<any> = await iii.call('streams.set', {
+      const result: StreamSetResult<any> = await iii.call('stream.set', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
@@ -66,18 +66,18 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
     })
   })
 
-  describe('streams.get', () => {
+  describe('stream.get', () => {
     it('should get an existing stream item', async () => {
       const testData: TestData = { name: 'Test', value: 100 }
 
-      await iii.call('streams.set', {
+      await iii.call('stream.set', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
         data: testData,
       })
 
-      const result: TestData = await iii.call('streams.get', {
+      const result: TestData = await iii.call('stream.get', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
@@ -88,7 +88,7 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
     })
 
     it('should return null for non-existent item', async () => {
-      const result = await iii.call('streams.get', {
+      const result = await iii.call('stream.get', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: 'non-existent-item',
@@ -98,22 +98,22 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
     })
   })
 
-  describe('streams.delete', () => {
+  describe('stream.delete', () => {
     it('should delete an existing stream item', async () => {
-      await iii.call('streams.set', {
+      await iii.call('stream.set', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
         data: { test: true },
       })
 
-      await iii.call('streams.delete', {
+      await iii.call('stream.delete', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
       })
 
-      const result = await iii.call('streams.get', {
+      const result = await iii.call('stream.get', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,
@@ -124,7 +124,7 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
 
     it('should handle deleting non-existent item gracefully', async () => {
       await expect(
-        iii.call('streams.delete', {
+        iii.call('stream.delete', {
           stream_name: testStreamName,
           group_id: testGroupId,
           item_id: 'non-existent',
@@ -133,20 +133,20 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
     })
   })
 
-  describe('streams.list', () => {
+  describe('stream.list', () => {
     it('should get all items in a group', async () => {
       type TestDataWithId = TestData & { id: string }
 
-      const groupId = `streams-${Date.now()}`
+      const groupId = `stream-${Date.now()}`
       const items: TestDataWithId[] = [
-        { id: 'streams-item1', value: 1 },
-        { id: 'streams-item2', value: 2 },
-        { id: 'streams-item3', value: 3 },
+        { id: 'stream-item1', value: 1 },
+        { id: 'stream-item2', value: 2 },
+        { id: 'stream-item3', value: 3 },
       ]
 
       // Set multiple items
       for (const item of items) {
-        await iii.call('streams.set', {
+        await iii.call('stream.set', {
           stream_name: testStreamName,
           group_id: groupId,
           item_id: item.id,
@@ -154,7 +154,7 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
         })
       }
 
-      const result: TestDataWithId[] = await iii.call('streams.list', {
+      const result: TestDataWithId[] = await iii.call('stream.list', {
         stream_name: testStreamName,
         group_id: groupId,
       })
@@ -166,7 +166,7 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
     })
   })
 
-  describe('streams custom operations', () => {
+  describe('stream custom operations', () => {
     it('should perform a custom operation on a stream item', async () => {
       const testStreamName = `test-stream-${Date.now()}`
       const state: Map<string, TestData> = new Map()
@@ -205,13 +205,13 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
         item_id: testItemId,
       }
 
-      await iii.call('streams.set', { ...getArgs, data: testData })
+      await iii.call('stream.set', { ...getArgs, data: testData })
 
       expect(state.get(`${testGroupId}::${testItemId}`)).toEqual(testData)
 
-      await expect(iii.call('streams.get', getArgs)).resolves.toEqual(testData)
-      await iii.call('streams.delete', getArgs)
-      await expect(iii.call('streams.get', getArgs)).resolves.toEqual(undefined)
+      await expect(iii.call('stream.get', getArgs)).resolves.toEqual(testData)
+      await iii.call('stream.delete', getArgs)
+      await expect(iii.call('stream.get', getArgs)).resolves.toEqual(undefined)
     })
   })
 })

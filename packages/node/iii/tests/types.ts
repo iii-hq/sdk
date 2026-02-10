@@ -1,4 +1,4 @@
-import type { UpdateOp, StreamSetResult } from '../src/streams'
+import type { UpdateOp, StreamSetResult } from '../src/stream'
 
 export interface StateSetResult {
   // biome-ignore lint/suspicious/noExplicitAny: any is fine here

@@ -25,7 +25,7 @@ import {
 } from './iii-types'
 import { withContext } from './context'
 import { Logger } from './logger'
-import type { IStream } from './streams'
+import type { IStream } from './stream'
 import {
   currentSpanId,
   currentTraceId,
@@ -293,12 +293,12 @@ class Sdk implements ISdk {
   }
 
   createStream = <TData>(streamName: string, stream: IStream<TData>): void => {
-    this.registerFunction({ id: `streams.get(${streamName})` }, stream.get.bind(stream))
-    this.registerFunction({ id: `streams.set(${streamName})` }, stream.set.bind(stream))
-    this.registerFunction({ id: `streams.delete(${streamName})` }, stream.delete.bind(stream))
-    this.registerFunction({ id: `streams.list(${streamName})` }, stream.list.bind(stream))
+    this.registerFunction({ id: `stream.get(${streamName})` }, stream.get.bind(stream))
+    this.registerFunction({ id: `stream.set(${streamName})` }, stream.set.bind(stream))
+    this.registerFunction({ id: `stream.delete(${streamName})` }, stream.delete.bind(stream))
+    this.registerFunction({ id: `stream.list(${streamName})` }, stream.list.bind(stream))
     this.registerFunction(
-      { id: `streams.listGroups(${streamName})` },
+      { id: `stream.listGroups(${streamName})` },
       stream.listGroups.bind(stream),
     )
   }

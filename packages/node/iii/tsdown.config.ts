@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig({
-  entry: ['./src/index.ts', './src/streams.ts', './src/telemetry.ts'],
+  entry: ['./src/index.ts', './src/stream.ts', './src/telemetry.ts'],
   format: ['esm', 'cjs'],
   dts: true,
   sourcemap: true,

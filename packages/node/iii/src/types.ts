@@ -6,7 +6,7 @@ import type {
   RegisterTriggerTypeMessage,
 } from './iii-types'
 import type { TriggerHandler } from './triggers'
-import type { IStream } from './streams'
+import type { IStream } from './stream'
 
 export type RemoteFunctionHandler<TInput = any, TOutput = any> = (data: TInput) => Promise<TOutput>
 

@@ -22,10 +22,10 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./streams": {
-      "types": "./dist/streams.d.ts",
-      "import": "./dist/streams.mjs",
-      "require": "./dist/streams.cjs"
+    "./stream": {
+      "types": "./dist/stream.d.ts",
+      "import": "./dist/stream.mjs",
+      "require": "./dist/stream.cjs"
     },
     "./telemetry": {
       "types": "./dist/telemetry.d.ts",

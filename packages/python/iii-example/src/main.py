@@ -8,7 +8,7 @@ from iii import ApiRequest, ApiResponse
 
 from .hooks import use_api, use_functions_available
 from .state import state
-from .streams import streams
+from .stream import streams
 
 
 def _generate_todo_id() -> str:

@@ -1,6 +1,6 @@
 import { useApi, useFunctionsAvailable, useOnLog } from './hooks'
 import { state } from './state'
-import { streams } from './streams'
+import { streams } from './stream'
 
 useFunctionsAvailable(functions => {
   console.log('--------------------------------')

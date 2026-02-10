@@ -6,7 +6,7 @@ from .bridge import III, InitOptions
 from .bridge_types import FunctionInfo, WorkerInfo, WorkerStatus
 from .context import Context, get_context, with_context
 from .logger import Logger
-from .streams import (
+from .stream import (
     IStream,
     StreamAuthInput,
     StreamAuthResult,

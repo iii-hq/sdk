@@ -28,7 +28,7 @@ from .bridge_types import (
 )
 from .context import Context, with_context
 from .logger import Logger
-from .streams import IStream
+from .stream import IStream
 from .triggers import Trigger, TriggerConfig, TriggerHandler
 from .types import RemoteFunctionData, RemoteTriggerTypeData
 
@@ -454,7 +454,7 @@ class III:
         - {stream_name}.set
         - {stream_name}.delete
         - {stream_name}.list
-        - {stream_name}.listGroups
+        - {stream_name}.list_groups
         - {stream_name}.update
 
         Args:
@@ -462,33 +462,33 @@ class III:
             stream: The stream implementation.
         """
         async def get_handler(data: Any) -> Any:
-            from .streams import StreamGetInput
+            from .stream import StreamGetInput
             input_data = StreamGetInput(**data) if isinstance(data, dict) else data
             return await stream.get(input_data)
 
         async def set_handler(data: Any) -> Any:
-            from .streams import StreamSetInput
+            from .stream import StreamSetInput
             input_data = StreamSetInput(**data) if isinstance(data, dict) else data
             result = await stream.set(input_data)
             return result.model_dump() if result else None
 
         async def delete_handler(data: Any) -> None:
-            from .streams import StreamDeleteInput
+            from .stream import StreamDeleteInput
             input_data = StreamDeleteInput(**data) if isinstance(data, dict) else data
             await stream.delete(input_data)
 
         async def list_handler(data: Any) -> list[Any]:
-            from .streams import StreamListInput
+            from .stream import StreamListInput
             input_data = StreamListInput(**data) if isinstance(data, dict) else data
             return await stream.list(input_data)
 
         async def list_groups_handler(data: Any) -> list[str]:
-            from .streams import StreamListGroupsInput
+            from .stream import StreamListGroupsInput
             input_data = StreamListGroupsInput(**data) if isinstance(data, dict) else data
             return await stream.list_groups(input_data)
 
         async def update_handler(data: Any) -> Any:
-            from .streams import StreamUpdateInput
+            from .stream import StreamUpdateInput
             input_data = StreamUpdateInput(**data) if isinstance(data, dict) else data
             result = await stream.update(input_data)
             return result.model_dump() if result else None
@@ -497,5 +497,5 @@ class III:
         self.register_function(f"{stream_name}.set", set_handler)
         self.register_function(f"{stream_name}.delete", delete_handler)
         self.register_function(f"{stream_name}.list", list_handler)
-        self.register_function(f"{stream_name}.listGroups", list_groups_handler)
+        self.register_function(f"{stream_name}.list_groups", list_groups_handler)
         self.register_function(f"{stream_name}.update", update_handler)

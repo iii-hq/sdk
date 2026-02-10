@@ -77,7 +77,7 @@ impl Streams {
             ops,
         };
 
-        let result = self.iii.call("streams.update", input).await?;
+        let result = self.iii.call("stream.update", input).await?;
 
         serde_json::from_value(result).map_err(|e| IIIError::Serde(e.to_string()))
     }

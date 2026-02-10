@@ -62,7 +62,7 @@ importers:
 
   iii-example:
     dependencies:
-      'iii-sdk':
+      iii-sdk:
         specifier: workspace:*
         version: link:../iii
     devDependencies:

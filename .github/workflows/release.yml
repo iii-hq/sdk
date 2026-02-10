@@ -264,7 +264,7 @@ jobs:
 
       - name: Publish to npm
         working-directory: packages/node/iii
-        run: pnpm publish --access restricted --no-git-checks
+        run: pnpm publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

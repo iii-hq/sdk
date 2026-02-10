@@ -8,7 +8,7 @@ description = "SDK for III Engine - a platform for building distributed applicat
 repository = "https://github.com/iii-hq/sdk"
 homepage = "https://github.com/iii-hq/sdk"
 keywords = ["iii", "sdk", "engine", "distributed"]
-categories = ["api-bindings", "asynchronous", "development-tools]
+categories = ["api-bindings", "asynchronous", "development-tools"]
 
 [lib]
 name = "iii_sdk"

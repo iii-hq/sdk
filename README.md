@@ -9,7 +9,7 @@ The III SDK provides a unified interface for building distributed applications w
 ## Supported Languages
 
 - **Node.js** - TypeScript/JavaScript SDK with full async support
-- **Python** - Async Python SDK with decorator-based function registration
+- **Python** - Async Python SDK with function registration
 - **Rust** - High-performance async Rust SDK with automatic reconnection
 
 ## Features
@@ -59,9 +59,10 @@ from iii import III
 
 iii = III("ws://localhost:49134")
 
-@iii.function("my.function")
 async def my_function(data):
     return {"result": "success"}
+
+iii.register_function("my.function", my_function)
 
 result = await iii.call("other.function", {"param": "value"})
 ```

@@ -314,17 +314,6 @@ class III:
 
         self._functions[path] = RemoteFunctionData(message=msg, handler=wrapped)
 
-    def function(
-        self, path: str, description: str | None = None
-    ) -> Callable[[RemoteFunctionHandler], RemoteFunctionHandler]:
-        """Decorator to register a function."""
-
-        def decorator(handler: RemoteFunctionHandler) -> RemoteFunctionHandler:
-            self.register_function(path, handler, description)
-            return handler
-
-        return decorator
-
     def register_service(self, id: str, description: str | None = None, parent_id: str | None = None) -> None:
         msg = RegisterServiceMessage(id=id, description=description, parent_service_id=parent_id)
         self._services[id] = msg

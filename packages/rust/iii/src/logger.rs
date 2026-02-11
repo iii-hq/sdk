@@ -53,13 +53,6 @@ impl Logger {
         }
         tracing::error!(function = %self.function_name, message = %message);
     }
-
-    pub fn debug(&self, message: &str, data: Option<Value>) {
-        if let Some(invoker) = &self.invoker {
-            invoker("logger.debug", self.build_params(message, data));
-        }
-        tracing::debug!(function = %self.function_name, message = %message);
-    }
 }
 
 #[cfg(test)]

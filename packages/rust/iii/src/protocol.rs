@@ -41,10 +41,6 @@ pub enum Message {
         invocation_id: Option<Uuid>,
         function_id: String,
         data: Value,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        traceparent: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        baggage: Option<String>,
     },
     InvocationResult {
         invocation_id: Uuid,
@@ -53,10 +49,6 @@ pub enum Message {
         result: Option<Value>,
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<ErrorBody>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        traceparent: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        baggage: Option<String>,
     },
     RegisterService {
         id: String,
@@ -66,9 +58,6 @@ pub enum Message {
     },
     Ping,
     Pong,
-    WorkerRegistered {
-        worker_id: String,
-    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

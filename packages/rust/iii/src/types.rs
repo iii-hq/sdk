@@ -5,13 +5,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    error::IIIError,
+    error::BridgeError,
     protocol::{RegisterFunctionMessage, RegisterTriggerTypeMessage},
     triggers::TriggerHandler,
 };
 
 pub type RemoteFunctionHandler =
-    Arc<dyn Fn(Value) -> BoxFuture<'static, Result<Value, IIIError>> + Send + Sync>;
+    Arc<dyn Fn(Value) -> BoxFuture<'static, Result<Value, BridgeError>> + Send + Sync>;
 
 // ============================================================================
 // Stream Update Types

@@ -1,8 +1,8 @@
 use thiserror::Error;
 
 #[derive(Debug, Error, Clone)]
-pub enum IIIError {
-    #[error("iii is not connected")]
+pub enum BridgeError {
+    #[error("bridge is not connected")]
     NotConnected,
     #[error("invocation timed out")]
     Timeout,
@@ -16,14 +16,17 @@ pub enum IIIError {
     WebSocket(String),
 }
 
-impl From<serde_json::Error> for IIIError {
+impl From<serde_json::Error> for BridgeError {
     fn from(err: serde_json::Error) -> Self {
-        IIIError::Serde(err.to_string())
+        BridgeError::Serde(err.to_string())
     }
 }
 
-impl From<tokio_tungstenite::tungstenite::Error> for IIIError {
+impl From<tokio_tungstenite::tungstenite::Error> for BridgeError {
     fn from(err: tokio_tungstenite::tungstenite::Error) -> Self {
-        IIIError::WebSocket(err.to_string())
+        BridgeError::WebSocket(err.to_string())
     }
 }
+
+/// Backward-compatible alias for the previous error type name.
+pub type IIIError = BridgeError;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
-use crate::error::IIIError;
+use crate::error::BridgeError;
 
 #[derive(Debug, Clone)]
 pub struct TriggerConfig {
@@ -14,8 +14,8 @@ pub struct TriggerConfig {
 
 #[async_trait]
 pub trait TriggerHandler: Send + Sync {
-    async fn register_trigger(&self, config: TriggerConfig) -> Result<(), IIIError>;
-    async fn unregister_trigger(&self, config: TriggerConfig) -> Result<(), IIIError>;
+    async fn register_trigger(&self, config: TriggerConfig) -> Result<(), BridgeError>;
+    async fn unregister_trigger(&self, config: TriggerConfig) -> Result<(), BridgeError>;
 }
 
 #[derive(Clone)]

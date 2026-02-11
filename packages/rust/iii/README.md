@@ -14,19 +14,19 @@ iii-sdk = { path = "../path/to/iii" }
 ## Usage
 
 ```rust
-use iii_sdk::III;
+use iii_sdk::Bridge;
 use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let iii = III::new("ws://127.0.0.1:49134");
-    iii.connect().await?;
+    let bridge = Bridge::new("ws://127.0.0.1:49134");
+    bridge.connect().await?;
 
-    iii.register_function("my.function", |input| async move {
+    bridge.register_function("my.function", |input| async move {
         Ok(json!({ "message": "Hello, world!", "input": input }))
     });
 
-    let result: serde_json::Value = iii
+    let result: serde_json::Value = bridge
         .call("my.function", json!({ "param": "value" }))
         .await?;
 
@@ -45,6 +45,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Notes
 
-- `III::connect` starts a background task and handles reconnection automatically.
+- `Bridge::connect` starts a background task and handles reconnection automatically.
 - The engine protocol currently supports `registertriggertype` but does not include an
   `unregistertriggertype` message; `unregister_trigger_type` only removes local handlers.

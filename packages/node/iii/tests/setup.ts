@@ -15,17 +15,12 @@ beforeAll(async () => {
     return
   }
 
-  console.log(
-    `Checking server availability at: ${process.env.III_HTTP_URL ?? 'http://localhost:3111'}`,
-  )
   serverAvailable = await checkServerAvailability()
 
   if (!serverAvailable) {
     console.warn('III Engine server is not available. Skipping integration tests.')
     console.warn(`Expected server at: ${process.env.III_HTTP_URL ?? 'http://localhost:3111'}`)
     console.warn('To run tests locally, start the III Engine server first.')
-  } else {
-    console.log('III Engine server is available. Running integration tests.')
   }
 })
 

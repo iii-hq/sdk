@@ -4,10 +4,5 @@
 //! Keep these exports so existing `iii::III` imports continue to work.
 
 pub use crate::bridge::{
-    Bridge as III,
-    FunctionInfo,
-    FunctionsAvailableGuard,
-    TriggerInfo,
-    WorkerInfo,
-    WorkerMetadata,
+    Bridge as III, FunctionInfo, FunctionsAvailableGuard, TriggerInfo, WorkerInfo, WorkerMetadata,
 };

@@ -5,18 +5,19 @@ import { execute, httpRequest, iii } from './utils'
 
 describe.skipIf(skipIfServerUnavailable())('Healthcheck Endpoint', () => {
   it('should register a healthcheck function and trigger', async () => {
-    const functionId = 'test.healthcheck'
-
-    iii.registerFunction({ id: functionId }, async (_req: ApiRequest): Promise<ApiResponse> => {
-      return {
-        status_code: 200,
-        body: {
-          status: 'healthy',
-          timestamp: new Date().toISOString(),
-          service: 'iii-sdk-test',
-        },
-      }
-    })
+    const fn = iii.registerFunction(
+      { id: 'test.healthcheck' },
+      async (_req: ApiRequest): Promise<ApiResponse> => {
+        return {
+          status_code: 200,
+          body: {
+            status: 'healthy',
+            timestamp: new Date().toISOString(),
+            service: 'iii-sdk-test',
+          },
+        }
+      },
+    )
 
     await execute(async () => {
       const response = await httpRequest('GET', '/health')
@@ -25,7 +26,7 @@ describe.skipIf(skipIfServerUnavailable())('Healthcheck Endpoint', () => {
 
     const trigger = iii.registerTrigger({
       trigger_type: 'api',
-      function_id: functionId,
+      function_id: fn.id,
       config: {
         api_path: 'health',
         http_method: 'GET',
@@ -42,12 +43,11 @@ describe.skipIf(skipIfServerUnavailable())('Healthcheck Endpoint', () => {
       expect(response.data).toHaveProperty('timestamp')
     })
 
+    fn.unregister()
     trigger.unregister()
 
-    // there's an issue with unregistering
-    // await execute(async () => {
-    //   const response = await httpRequest('GET', '/health')
-    //   expect(response.status).toBe(404)
-    // })
+    await execute(() =>
+      expect(httpRequest('GET', '/health')).resolves.toHaveProperty('status', 404),
+    )
   })
 })

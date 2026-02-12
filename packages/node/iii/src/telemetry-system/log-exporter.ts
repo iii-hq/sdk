@@ -14,6 +14,7 @@ import { PREFIX_LOGS } from './types'
  */
 export class EngineLogExporter implements LogRecordExporter {
   private static readonly MAX_PENDING_EXPORTS = 100
+  private lastDropWarnTime = 0
   private connection: SharedEngineConnection
   private pendingExports: Array<{
     logs: ReadableLogRecord[]
@@ -40,7 +41,11 @@ export class EngineLogExporter implements LogRecordExporter {
       if (this.pendingExports.length >= EngineLogExporter.MAX_PENDING_EXPORTS) {
         const dropped = this.pendingExports.shift()
         dropped?.callback({ code: ExportResultCode.FAILED, error: new Error('Queue overflow') })
-        console.warn('[OTel] Logs export queue full, dropped oldest entry')
+        const now = Date.now()
+        if (now - this.lastDropWarnTime > 10_000) {
+          console.warn('[OTel] Logs export queue full, dropping oldest entries')
+          this.lastDropWarnTime = now
+        }
       }
       this.pendingExports.push({ logs, callback: resultCallback })
       return

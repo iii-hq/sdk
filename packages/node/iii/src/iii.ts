@@ -62,6 +62,10 @@ import type {
 const require = createRequire(import.meta.url)
 const { version: SDK_VERSION } = require('../package.json')
 
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
+}
+
 function getOsInfo(): string {
   return `${os.platform()} ${os.release()} (${os.arch()})`
 }
@@ -615,8 +619,9 @@ class Sdk implements ISdk {
     if (otelLogger) {
       const attributes: Record<string, string> = {}
       if (error instanceof Error) {
-        if (error.stack) attributes['exception.stacktrace'] = error.stack
+        attributes['exception.message'] = error.message
         attributes['exception.type'] = error.name
+        if (error.stack) attributes['exception.stacktrace'] = error.stack
       }
       otelLogger.emit({
         severityNumber: SeverityNumber.ERROR,
@@ -694,7 +699,7 @@ class Sdk implements ISdk {
           baggage: getResponseBaggage(),
         })
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error))
+        const err = toError(error)
         this.sendMessage(MessageType.InvocationResult, {
           invocation_id,
           function_id,
@@ -723,7 +728,7 @@ class Sdk implements ISdk {
         await triggerTypeData.handler.registerTrigger({ id, function_id, config })
         this.sendMessage(MessageType.TriggerRegistrationResult, { id, trigger_type, function_id })
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error))
+        const err = toError(error)
         this.sendMessage(MessageType.TriggerRegistrationResult, {
           id,
           trigger_type,

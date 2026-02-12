@@ -61,13 +61,21 @@ let serviceName: string = 'iii-node-iii'
  * This should be called once at application startup.
  */
 export function initOtel(config: OtelConfig = {}): void {
+  if (tracerProvider) {
+    console.warn('[OTel] Already initialized, skipping')
+    return
+  }
+
+  const otelFalsyValues = ['false', '0', 'no', 'off', 'disabled']
   const enabled =
-    config.enabled ?? (process.env.OTEL_ENABLED !== 'false' && process.env.OTEL_ENABLED !== '0')
+    config.enabled ?? !otelFalsyValues.includes((process.env.OTEL_ENABLED ?? '').toLowerCase())
 
   if (!enabled) {
     console.log('[OTel] OpenTelemetry is explicitly disabled')
     return
   }
+
+  console.log('[OTel] Telemetry enabled by default. Set OTEL_ENABLED=false to disable.')
 
   // Register any provided instrumentations
   if (config.instrumentations?.length) {
@@ -118,7 +126,7 @@ export function initOtel(config: OtelConfig = {}): void {
   // Initialize metrics if enabled
   const metricsEnabled =
     config.metricsEnabled ??
-    (process.env.OTEL_METRICS_ENABLED !== 'false' && process.env.OTEL_METRICS_ENABLED !== '0')
+    !otelFalsyValues.includes((process.env.OTEL_METRICS_ENABLED ?? '').toLowerCase())
 
   if (metricsEnabled) {
     const metricsExporter = new EngineMetricsExporter(sharedConnection)

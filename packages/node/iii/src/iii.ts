@@ -80,7 +80,8 @@ export type InitOptions = {
   invocationTimeoutMs?: number
   /** Configuration for WebSocket reconnection behavior */
   reconnectionConfig?: Partial<IIIReconnectionConfig>
-  /** OpenTelemetry configuration. If provided, OTEL will be initialized automatically.
+  /** OpenTelemetry configuration overrides. OTEL is enabled by default.
+   * Set `enabled: false` or `OTEL_ENABLED=false` env var to disable.
    * The engineWsUrl is set automatically from the III address. */
   otel?: Omit<OtelConfig, 'engineWsUrl'>
 }
@@ -122,10 +123,8 @@ class Sdk implements ISdk {
       ...options?.reconnectionConfig,
     }
 
-    // Initialize OpenTelemetry if config is provided
-    if (options?.otel) {
-      initOtel({ ...options.otel, engineWsUrl: this.address })
-    }
+    // Initialize OpenTelemetry (enabled by default, user config merged if provided)
+    initOtel({ ...(options?.otel ?? {}), engineWsUrl: this.address })
 
     this.connect()
   }
@@ -614,9 +613,15 @@ class Sdk implements ISdk {
     const errorMessage = error instanceof Error ? error.message : String(error ?? '')
 
     if (otelLogger) {
+      const attributes: Record<string, string> = {}
+      if (error instanceof Error) {
+        if (error.stack) attributes['exception.stacktrace'] = error.stack
+        attributes['exception.type'] = error.name
+      }
       otelLogger.emit({
         severityNumber: SeverityNumber.ERROR,
         body: `[iii] ${message}${errorMessage ? `: ${errorMessage}` : ''}`,
+        attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
       })
     } else {
       console.error(`[iii] ${message}`, error ?? '')
@@ -689,10 +694,11 @@ class Sdk implements ISdk {
           baggage: getResponseBaggage(),
         })
       } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error))
         this.sendMessage(MessageType.InvocationResult, {
           invocation_id,
           function_id,
-          error: { code: 'invocation_failed', message: (error as Error).message },
+          error: { code: 'invocation_failed', message: err.message },
           traceparent: getResponseTraceparent(),
           baggage: getResponseBaggage(),
         })
@@ -717,11 +723,12 @@ class Sdk implements ISdk {
         await triggerTypeData.handler.registerTrigger({ id, function_id, config })
         this.sendMessage(MessageType.TriggerRegistrationResult, { id, trigger_type, function_id })
       } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error))
         this.sendMessage(MessageType.TriggerRegistrationResult, {
           id,
           trigger_type,
           function_id,
-          error: { code: 'trigger_registration_failed', message: (error as Error).message },
+          error: { code: 'trigger_registration_failed', message: err.message },
         })
       }
     } else {

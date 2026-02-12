@@ -16,7 +16,7 @@ name = "iii_sdk"
 path = "src/lib.rs"
 
 [features]
-default = []
+default = ["otel"]
 otel = [
     "opentelemetry",
     "opentelemetry_sdk",

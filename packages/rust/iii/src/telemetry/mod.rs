@@ -59,8 +59,8 @@ pub async fn init_otel(config: OtelConfig) {
 
     let enabled = config.enabled.unwrap_or_else(|| {
         std::env::var("OTEL_ENABLED")
-            .map(|v| v == "true" || v == "1")
-            .unwrap_or(false)
+            .map(|v| v != "false" && v != "0")
+            .unwrap_or(true)
     });
 
     if !enabled {

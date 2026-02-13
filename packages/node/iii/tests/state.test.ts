@@ -10,13 +10,11 @@ type TestData = {
 }
 
 describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
-  const testGroupId = 'test-group'
-  const testItemId = 'test-item'
+  const testScope = 'test-group'
+  const testKey = 'test-item'
 
   beforeEach(async () => {
-    await iii
-      .call('state.delete', { group_id: testGroupId, item_id: testItemId })
-      .catch(() => void 0)
+    await iii.call('state.delete', { scope: testScope, key: testKey }).catch(() => void 0)
   })
 
   describe('state.set', () => {
@@ -28,8 +26,8 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
       }
 
       const result = await iii.call('state.set', {
-        group_id: testGroupId,
-        item_id: testItemId,
+        scope: testScope,
+        key: testKey,
         data: testData,
       })
 
@@ -42,14 +40,14 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
       const updatedData: TestData = { value: 2, updated: true }
 
       await iii.call('state.set', {
-        group_id: testGroupId,
-        item_id: testItemId,
+        scope: testScope,
+        key: testKey,
         data: initialData,
       })
 
       const result: StateSetResult = await iii.call('state.set', {
-        group_id: testGroupId,
-        item_id: testItemId,
+        scope: testScope,
+        key: testKey,
         data: updatedData,
       })
 
@@ -63,14 +61,14 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
       const testData: TestData = { name: 'Test', value: 100 }
 
       await iii.call('state.set', {
-        group_id: testGroupId,
-        item_id: testItemId,
+        scope: testScope,
+        key: testKey,
         data: testData,
       })
 
       const result: TestData = await iii.call('state.get', {
-        group_id: testGroupId,
-        item_id: testItemId,
+        scope: testScope,
+        key: testKey,
       })
 
       expect(result).toBeDefined()
@@ -79,8 +77,8 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
 
     it('should return null for non-existent item', async () => {
       const result = await iii.call('state.get', {
-        group_id: testGroupId,
-        item_id: 'non-existent-item',
+        scope: testScope,
+        key: 'non-existent-item',
       })
 
       expect(result).toBeUndefined()
@@ -90,19 +88,19 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
   describe('state.delete', () => {
     it('should delete an existing state item', async () => {
       await iii.call('state.set', {
-        group_id: testGroupId,
-        item_id: testItemId,
+        scope: testScope,
+        key: testKey,
         data: { test: true },
       })
 
       await iii.call('state.delete', {
-        group_id: testGroupId,
-        item_id: testItemId,
+        scope: testScope,
+        key: testKey,
       })
 
       const result = await iii.call('state.get', {
-        group_id: testGroupId,
-        item_id: testItemId,
+        scope: testScope,
+        key: testKey,
       })
 
       expect(result).toBeUndefined()
@@ -111,8 +109,8 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
     it('should handle deleting non-existent item gracefully', async () => {
       await expect(
         iii.call('state.delete', {
-          group_id: testGroupId,
-          item_id: 'non-existent',
+          scope: testScope,
+          key: 'non-existent',
         }),
       ).resolves.not.toThrow()
     })
@@ -132,13 +130,13 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
       // Set multiple items
       for (const item of items) {
         await iii.call('state.set', {
-          group_id: groupId,
-          item_id: item.id,
+          scope: groupId,
+          key: item.id,
           data: item,
         })
       }
 
-      const result: TestDataWithId[] = await iii.call('state.list', { group_id: groupId })
+      const result: TestDataWithId[] = await iii.call('state.list', { scope: groupId })
       const sort = (a: TestDataWithId, b: TestDataWithId) => a.id.localeCompare(b.id)
 
       expect(Array.isArray(result)).toBe(true)

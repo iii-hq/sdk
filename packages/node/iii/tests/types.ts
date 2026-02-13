@@ -10,30 +10,30 @@ export interface StateSetResult {
 export type { StreamSetResult }
 
 export interface StateSetInput {
-  group_id: string
-  item_id: string
+  scope: string
+  key: string
   // biome-ignore lint/suspicious/noExplicitAny: any is fine here
   data: any
 }
 
 export interface StateGetInput {
-  group_id: string
-  item_id: string
+  scope: string
+  key: string
 }
 
 export interface StateDeleteInput {
-  group_id: string
-  item_id: string
+  scope: string
+  key: string
 }
 
 export interface StateUpdateInput {
-  group_id: string
-  item_id: string
+  scope: string
+  key: string
   ops: UpdateOp[]
 }
 
 export interface StateGetGroupInput {
-  group_id: string
+  scope: string
 }
 
 export enum StateEventType {
@@ -45,8 +45,8 @@ export enum StateEventType {
 export interface StateEventData {
   type: string
   event_type: StateEventType
-  group_id: string
-  item_id: string
+  scope: string
+  key: string
   // biome-ignore lint/suspicious/noExplicitAny: any is fine here
   old_value?: any
   // biome-ignore lint/suspicious/noExplicitAny: any is fine here

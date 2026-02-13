@@ -38,7 +38,7 @@ export function currentSpanId(): string | undefined {
 export function injectTraceparent(): string | undefined {
   const carrier: Record<string, string> = {}
   propagation.inject(context.active(), carrier)
-  return carrier['traceparent']
+  return carrier.traceparent
 }
 
 /**
@@ -55,7 +55,7 @@ export function extractTraceparent(traceparent: string): Context {
 export function injectBaggage(): string | undefined {
   const carrier: Record<string, string> = {}
   propagation.inject(context.active(), carrier)
-  return carrier['baggage']
+  return carrier.baggage
 }
 
 /**
@@ -72,10 +72,10 @@ export function extractBaggage(baggage: string): Context {
 export function extractContext(traceparent?: string, baggage?: string): Context {
   const carrier: Record<string, string> = {}
   if (traceparent) {
-    carrier['traceparent'] = traceparent
+    carrier.traceparent = traceparent
   }
   if (baggage) {
-    carrier['baggage'] = baggage
+    carrier.baggage = baggage
   }
   return propagation.extract(context.active(), carrier)
 }

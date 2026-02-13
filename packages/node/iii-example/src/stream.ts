@@ -2,16 +2,21 @@ import { iii } from './iii'
 import type { Todo } from './types'
 
 export const streams = {
-  get: async (stream_name: string, group_id: string, item_id: string): Promise<any | null> => {
+  get: async (stream_name: string, group_id: string, item_id: string): Promise<unknown | null> => {
     return iii.call('stream::get', { stream_name, group_id, item_id })
   },
-  set: async (stream_name: string, group_id: string, item_id: string, data: any): Promise<any> => {
+  set: async (
+    stream_name: string,
+    group_id: string,
+    item_id: string,
+    data: unknown,
+  ): Promise<unknown> => {
     return iii.call('stream::set', { stream_name, group_id, item_id, data })
   },
   delete: async (stream_name: string, group_id: string, item_id: string): Promise<void> => {
     return iii.call('stream::delete', { stream_name, group_id, item_id })
   },
-  list: async (stream_name: string, group_id: string): Promise<any[]> => {
+  list: async (stream_name: string, group_id: string): Promise<unknown[]> => {
     return iii.call('stream::list', { stream_name, group_id })
   },
   listGroups: async (stream_name: string): Promise<string[]> => {

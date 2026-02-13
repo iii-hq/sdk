@@ -1,6 +1,6 @@
 import { context } from '@opentelemetry/api'
-import { createRequire } from 'module'
-import * as os from 'os'
+import { createRequire } from 'node:module'
+import * as os from 'node:os'
 import { type Data, WebSocket } from 'ws'
 import {
   type IIIConnectionState,
@@ -80,7 +80,8 @@ export type InitOptions = {
   invocationTimeoutMs?: number
   /** Configuration for WebSocket reconnection behavior */
   reconnectionConfig?: Partial<IIIReconnectionConfig>
-  /** OpenTelemetry configuration. If provided, OTEL will be initialized automatically.
+  /** OpenTelemetry configuration. OTel is initialized automatically by default.
+   * Set `{ enabled: false }` or env `OTEL_ENABLED=false/0/no/off` to disable.
    * The engineWsUrl is set automatically from the III address. */
   otel?: Omit<OtelConfig, 'engineWsUrl'>
 }
@@ -122,10 +123,8 @@ class Sdk implements ISdk {
       ...options?.reconnectionConfig,
     }
 
-    // Initialize OpenTelemetry if config is provided
-    if (options?.otel) {
-      initOtel({ ...options.otel, engineWsUrl: this.address })
-    }
+    // Initialize OpenTelemetry (enabled by default, opt-out via config or env)
+    initOtel({ ...options?.otel, engineWsUrl: this.address })
 
     this.connect()
   }
@@ -187,7 +186,7 @@ class Sdk implements ISdk {
             withSpan(`invoke ${message.id}`, { kind: SpanKind.SERVER }, async span => {
               const traceId = currentTraceId() ?? crypto.randomUUID()
               const spanId = currentSpanId()
-              const logger = new Logger(undefined, traceId, message.id, spanId)
+              const logger = new Logger(traceId, message.id, spanId)
               const ctx = { logger, trace: span }
 
               return withContext(async () => await handler(input), ctx)
@@ -197,7 +196,7 @@ class Sdk implements ISdk {
 
         // Fallback without tracing
         const traceId = crypto.randomUUID()
-        const logger = new Logger(undefined, traceId, message.id)
+        const logger = new Logger(traceId, message.id)
         const ctx = { logger }
 
         return withContext(async () => await handler(input), ctx)

@@ -6,9 +6,9 @@ export const useApi = (
     api_path: string
     http_method: string
     description?: string
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   },
-  handler: (req: ApiRequest<any>, context: Context) => Promise<ApiResponse>,
+  handler: (req: ApiRequest<unknown>, context: Context) => Promise<ApiResponse>,
 ) => {
   const function_id = `api.${config.http_method.toLowerCase()}.${config.api_path}`
 

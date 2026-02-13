@@ -11,9 +11,7 @@ export const engineHttpUrl = ENGINE_HTTP_URL
 
 export const iii = init(engineWsUrl, {
   otel: {
-    enabled: true,
     serviceName: 'iii-tests',
-    metricsEnabled: true,
     serviceVersion: '0.0.1',
     reconnectionConfig: {
       maxRetries: 3,
@@ -28,6 +26,7 @@ export const iii = init(engineWsUrl, {
   },
 })
 
+// Standalone logger for test utilities — no trace context needed
 export const logger = new Logger()
 
 export async function checkServerAvailability(): Promise<boolean> {

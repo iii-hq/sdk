@@ -7,16 +7,10 @@ export type LoggerParams = {
   trace_id?: string
   span_id?: string
   service_name?: string
-  data?: any
+  data?: unknown
   /** @deprecated Use service_name instead */
   function_name?: string
 }
-
-/**
- * @deprecated Use OpenTelemetry Logger directly via getLogger() from telemetry module.
- * This invoker pattern is maintained for backward compatibility only.
- */
-export type LoggerInvoker = (function_id: string, params: LoggerParams) => Promise<void> | void
 
 export class Logger {
   private _otelLogger: ReturnType<typeof getOtelLogger> | null = null
@@ -30,16 +24,12 @@ export class Logger {
   }
 
   constructor(
-    /**
-     * @deprecated This parameter is ignored. Logger now uses OpenTelemetry internally.
-     */
-    private readonly invoker?: LoggerInvoker,
     private readonly traceId?: string,
     private readonly serviceName?: string,
     private readonly spanId?: string,
   ) {}
 
-  private emit(message: string, severity: SeverityNumber, data?: any): void {
+  private emit(message: string, severity: SeverityNumber, data?: unknown): void {
     const attributes: Record<string, string | undefined> = {}
 
     if (this.traceId) {
@@ -82,19 +72,19 @@ export class Logger {
     }
   }
 
-  info(message: string, data?: any): void {
+  info(message: string, data?: unknown): void {
     this.emit(message, SeverityNumber.INFO, data)
   }
 
-  warn(message: string, data?: any): void {
+  warn(message: string, data?: unknown): void {
     this.emit(message, SeverityNumber.WARN, data)
   }
 
-  error(message: string, data?: any): void {
+  error(message: string, data?: unknown): void {
     this.emit(message, SeverityNumber.ERROR, data)
   }
 
-  debug(message: string, data?: any): void {
+  debug(message: string, data?: unknown): void {
     this.emit(message, SeverityNumber.DEBUG, data)
   }
 }

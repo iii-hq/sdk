@@ -47,7 +47,7 @@ export const DEFAULT_RECONNECTION_CONFIG: ReconnectionConfig = {
 
 /** Configuration for OpenTelemetry initialization. */
 export interface OtelConfig {
-  /** Whether OpenTelemetry export is enabled. Defaults to OTEL_ENABLED env var. */
+  /** Whether OpenTelemetry export is enabled. Defaults to true. Set to false or OTEL_ENABLED=false/0/no/off to disable. */
   enabled?: boolean
   /** The service name to report. Defaults to OTEL_SERVICE_NAME or "iii-node". */
   serviceName?: string
@@ -61,10 +61,27 @@ export interface OtelConfig {
   engineWsUrl?: string
   /** OpenTelemetry instrumentations to register (e.g., PrismaInstrumentation). */
   instrumentations?: Instrumentation[]
-  /** Whether OpenTelemetry metrics export is enabled. Defaults to OTEL_METRICS_ENABLED env var. */
+  /** Whether OpenTelemetry metrics export is enabled. Defaults to true. Set to false or OTEL_METRICS_ENABLED=false/0/no/off to disable. */
   metricsEnabled?: boolean
   /** Metrics export interval in milliseconds. Defaults to 60000 (60 seconds). */
   metricsExportIntervalMs?: number
   /** Optional reconnection configuration for the WebSocket connection. */
   reconnectionConfig?: Partial<ReconnectionConfig>
+}
+
+/** Default configuration values for OpenTelemetry initialization. */
+export const DEFAULT_OTEL_CONFIG = {
+  enabled: true,
+  serviceName: 'iii-node',
+  serviceVersion: 'unknown',
+  engineWsUrl: 'ws://localhost:49134',
+  metricsEnabled: true,
+  metricsExportIntervalMs: 60000,
+} as const satisfies Partial<OtelConfig>
+
+/** Parse a boolean environment variable, recognizing 'false', '0', 'no', 'off' as false. */
+export function parseBoolEnv(value: string | undefined, defaultValue: boolean): boolean {
+  if (value === undefined) return defaultValue
+  const lower = value.toLowerCase()
+  return lower !== 'false' && lower !== '0' && lower !== 'no' && lower !== 'off'
 }

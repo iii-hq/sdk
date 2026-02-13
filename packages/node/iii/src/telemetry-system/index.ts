@@ -7,7 +7,7 @@
 
 import { Resource } from '@opentelemetry/resources'
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import {
   trace,
   context,
@@ -34,6 +34,8 @@ import { type Logger, SeverityNumber } from '@opentelemetry/api-logs'
 
 import {
   type OtelConfig,
+  DEFAULT_OTEL_CONFIG,
+  parseBoolEnv,
   ATTR_SERVICE_VERSION,
   ATTR_SERVICE_NAMESPACE,
   ATTR_SERVICE_INSTANCE_ID,
@@ -62,10 +64,12 @@ let serviceName: string = 'iii-node-iii'
  */
 export function initOtel(config: OtelConfig = {}): void {
   const enabled =
-    config.enabled ?? (process.env.OTEL_ENABLED === 'true' || process.env.OTEL_ENABLED === '1')
+    config.enabled ?? parseBoolEnv(process.env.OTEL_ENABLED, DEFAULT_OTEL_CONFIG.enabled)
 
   if (!enabled) {
-    console.log('[OTel] OpenTelemetry is disabled')
+    console.debug(
+      '[OTel] OpenTelemetry is disabled. To enable, remove OTEL_ENABLED=false or set enabled: true in config.',
+    )
     return
   }
 
@@ -75,12 +79,15 @@ export function initOtel(config: OtelConfig = {}): void {
   }
 
   // Configure service identity
-  serviceName = config.serviceName ?? process.env.OTEL_SERVICE_NAME ?? 'iii-node-iii'
-  const serviceVersion = config.serviceVersion ?? process.env.SERVICE_VERSION ?? 'unknown'
+  serviceName =
+    config.serviceName ?? process.env.OTEL_SERVICE_NAME ?? DEFAULT_OTEL_CONFIG.serviceName
+  const serviceVersion =
+    config.serviceVersion ?? process.env.SERVICE_VERSION ?? DEFAULT_OTEL_CONFIG.serviceVersion
   const serviceNamespace = config.serviceNamespace ?? process.env.SERVICE_NAMESPACE
   const serviceInstanceId =
     config.serviceInstanceId ?? process.env.SERVICE_INSTANCE_ID ?? randomUUID()
-  const engineWsUrl = config.engineWsUrl ?? process.env.III_BRIDGE_URL ?? 'ws://localhost:49134'
+  const engineWsUrl =
+    config.engineWsUrl ?? process.env.III_BRIDGE_URL ?? DEFAULT_OTEL_CONFIG.engineWsUrl
 
   // Build resource attributes
   const resourceAttributes: Record<string, string> = {
@@ -113,16 +120,17 @@ export function initOtel(config: OtelConfig = {}): void {
   tracerProvider.register()
   tracer = trace.getTracer(serviceName)
 
-  console.log(`[OTel] Traces initialized: engine=${engineWsUrl}, service=${serviceName}`)
+  console.debug(`[OTel] Traces initialized: engine=${engineWsUrl}, service=${serviceName}`)
 
-  // Initialize metrics if enabled
+  // Initialize metrics (enabled by default, opt-out via config or env)
   const metricsEnabled =
     config.metricsEnabled ??
-    (process.env.OTEL_METRICS_ENABLED === 'true' || process.env.OTEL_METRICS_ENABLED === '1')
+    parseBoolEnv(process.env.OTEL_METRICS_ENABLED, DEFAULT_OTEL_CONFIG.metricsEnabled)
 
   if (metricsEnabled) {
     const metricsExporter = new EngineMetricsExporter(sharedConnection)
-    const exportIntervalMs = config.metricsExportIntervalMs ?? 60000
+    const exportIntervalMs =
+      config.metricsExportIntervalMs ?? DEFAULT_OTEL_CONFIG.metricsExportIntervalMs
 
     const metricReader = new PeriodicExportingMetricReader({
       exporter: metricsExporter,
@@ -137,7 +145,7 @@ export function initOtel(config: OtelConfig = {}): void {
     metrics.setGlobalMeterProvider(meterProvider)
     meter = meterProvider.getMeter(serviceName)
 
-    console.log(`[OTel] Metrics initialized: interval=${exportIntervalMs}ms`)
+    console.debug(`[OTel] Metrics initialized: interval=${exportIntervalMs}ms`)
   }
 
   // Initialize logs (always enabled when OTEL is enabled)
@@ -146,7 +154,7 @@ export function initOtel(config: OtelConfig = {}): void {
   loggerProvider.addLogRecordProcessor(new SimpleLogRecordProcessor(logExporter))
   logger = loggerProvider.getLogger(serviceName)
 
-  console.log('[OTel] Logs initialized')
+  console.debug('[OTel] Logs initialized')
 }
 
 /**

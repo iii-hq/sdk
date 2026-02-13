@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { StateEventType, type StateEventData, type StateSetResult } from '../src/state'
+import type { FunctionRef, Trigger } from '../src/types'
 import { skipIfServerUnavailable } from './setup'
-import { iii } from './utils'
-import type { StateSetResult } from './types'
+import { execute, iii, logger } from './utils'
 
 type TestData = {
   name?: string
@@ -10,13 +11,11 @@ type TestData = {
 }
 
 describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
-  const testGroupId = 'test-group'
-  const testItemId = 'test-item'
+  const scope = 'test-scope'
+  const key = 'test-item'
 
   beforeEach(async () => {
-    await iii
-      .call('state.delete', { group_id: testGroupId, item_id: testItemId })
-      .catch(() => void 0)
+    await iii.call('state.delete', { scope, key }).catch(() => void 0)
   })
 
   describe('state.set', () => {
@@ -28,8 +27,8 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
       }
 
       const result = await iii.call('state.set', {
-        group_id: testGroupId,
-        item_id: testItemId,
+        scope,
+        key,
         data: testData,
       })
 
@@ -41,15 +40,11 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
       const initialData: TestData = { value: 1 }
       const updatedData: TestData = { value: 2, updated: true }
 
-      await iii.call('state.set', {
-        group_id: testGroupId,
-        item_id: testItemId,
-        data: initialData,
-      })
+      await iii.call('state.set', { scope, key, data: initialData })
 
-      const result: StateSetResult = await iii.call('state.set', {
-        group_id: testGroupId,
-        item_id: testItemId,
+      const result: StateSetResult<TestData> = await iii.call('state.set', {
+        scope,
+        key,
         data: updatedData,
       })
 
@@ -60,28 +55,18 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
 
   describe('state.get', () => {
     it('should get an existing state item', async () => {
-      const testData: TestData = { name: 'Test', value: 100 }
+      const data: TestData = { name: 'Test', value: 100 }
 
-      await iii.call('state.set', {
-        group_id: testGroupId,
-        item_id: testItemId,
-        data: testData,
-      })
+      await iii.call('state.set', { scope, key, data })
 
-      const result: TestData = await iii.call('state.get', {
-        group_id: testGroupId,
-        item_id: testItemId,
-      })
+      const result: TestData = await iii.call('state.get', { scope, key })
 
       expect(result).toBeDefined()
-      expect(result).toEqual(testData)
+      expect(result).toEqual(data)
     })
 
     it('should return null for non-existent item', async () => {
-      const result = await iii.call('state.get', {
-        group_id: testGroupId,
-        item_id: 'non-existent-item',
-      })
+      const result = await iii.call('state.get', { scope, key: 'non-existent-item' })
 
       expect(result).toBeUndefined()
     })
@@ -89,40 +74,21 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
 
   describe('state.delete', () => {
     it('should delete an existing state item', async () => {
-      await iii.call('state.set', {
-        group_id: testGroupId,
-        item_id: testItemId,
-        data: { test: true },
-      })
-
-      await iii.call('state.delete', {
-        group_id: testGroupId,
-        item_id: testItemId,
-      })
-
-      const result = await iii.call('state.get', {
-        group_id: testGroupId,
-        item_id: testItemId,
-      })
-
-      expect(result).toBeUndefined()
+      await iii.call('state.set', { scope, key, data: { test: true } })
+      await iii.call('state.delete', { scope, key })
+      await expect(iii.call('state.get', { scope, key })).resolves.toBeUndefined()
     })
 
     it('should handle deleting non-existent item gracefully', async () => {
-      await expect(
-        iii.call('state.delete', {
-          group_id: testGroupId,
-          item_id: 'non-existent',
-        }),
-      ).resolves.not.toThrow()
+      await expect(iii.call('state.delete', { scope, key: 'non-existent' })).resolves.not.toThrow()
     })
   })
 
   describe('state.list', () => {
-    it('should get all items in a group', async () => {
+    it('should get all items in a scope', async () => {
       type TestDataWithId = TestData & { id: string }
 
-      const groupId = `state-${Date.now()}`
+      const scope = `state-${Date.now()}`
       const items: TestDataWithId[] = [
         { id: 'state-item1', value: 1 },
         { id: 'state-item2', value: 2 },
@@ -131,19 +97,57 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
 
       // Set multiple items
       for (const item of items) {
-        await iii.call('state.set', {
-          group_id: groupId,
-          item_id: item.id,
-          data: item,
-        })
+        await iii.call('state.set', { scope, key: item.id, data: item })
       }
 
-      const result: TestDataWithId[] = await iii.call('state.list', { group_id: groupId })
+      const result: TestDataWithId[] = await iii.call('state.list', { scope })
       const sort = (a: TestDataWithId, b: TestDataWithId) => a.id.localeCompare(b.id)
 
       expect(Array.isArray(result)).toBe(true)
       expect(result.length).toBeGreaterThanOrEqual(items.length)
       expect(result.sort(sort)).toEqual(items.sort(sort))
+    })
+  })
+
+  describe('reactive state', () => {
+    it('should update the state when the state is updated', async () => {
+      const data: TestData = { name: 'Test', value: 100 }
+      const updatedData: TestData = { name: 'New Test Data', value: 200 }
+      const reactiveResult: { data?: TestData; called: boolean } = { called: false }
+
+      await iii.call('state.set', { scope, key, data })
+
+      let trigger: Trigger | undefined
+      let stateUpdatedFunction: FunctionRef | undefined
+
+      try {
+        stateUpdatedFunction = iii.registerFunction(
+          { id: 'state.updated' },
+          async (event: StateEventData<TestData>) => {
+            logger.info('State updated', { event })
+
+            if (event.type === 'state' && event.event_type === StateEventType.Updated) {
+              reactiveResult.data = event.new_value
+              reactiveResult.called = true
+            }
+          },
+        )
+
+        trigger = iii.registerTrigger({
+          trigger_type: 'state',
+          function_id: stateUpdatedFunction.id,
+          config: { scope, key },
+        })
+
+        await iii.call('state.set', { scope, key, data: updatedData })
+        await execute(async () => {
+          expect(reactiveResult.called).toBe(true)
+          expect(reactiveResult.data).toEqual(updatedData)
+        })
+      } finally {
+        trigger?.unregister()
+        stateUpdatedFunction?.unregister()
+      }
     })
   })
 })

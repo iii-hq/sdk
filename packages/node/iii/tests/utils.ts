@@ -1,5 +1,5 @@
 // import { iii } from 'iii-sdk'
-import { init } from '../src/index'
+import { init, Logger } from '../src/index'
 
 const ENGINE_WS_URL = process.env.III_BRIDGE_URL ?? 'ws://localhost:49134'
 const ENGINE_HTTP_URL = process.env.III_HTTP_URL ?? 'http://localhost:3111'
@@ -10,12 +10,25 @@ export const engineWsUrl = ENGINE_WS_URL
 export const engineHttpUrl = ENGINE_HTTP_URL
 
 export const iii = init(engineWsUrl, {
+  otel: {
+    enabled: true,
+    serviceName: 'iii-tests',
+    metricsEnabled: true,
+    serviceVersion: '0.0.1',
+    reconnectionConfig: {
+      maxRetries: 3,
+      initialDelayMs: 100,
+      maxDelayMs: 1000,
+    },
+  },
   reconnectionConfig: {
     maxRetries: 3,
     initialDelayMs: 100,
     maxDelayMs: 1000,
   },
 })
+
+export const logger = new Logger()
 
 export async function checkServerAvailability(): Promise<boolean> {
   try {

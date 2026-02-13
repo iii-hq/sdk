@@ -15,7 +15,6 @@ flowchart TD
   subgraph release [Release Flow]
     CreateTag[create-tag.yml\nManual Dispatch] --> |pushes v* tag| Release[release.yml]
     Release --> |on completion| Validate[validate-release.yml]
-    Validate --> |on failure| Rollback[rollback.yml]
   end
 
   subgraph prerelease [Pre-release - Manual]
@@ -31,7 +30,6 @@ flowchart TD
   Release --> PublishNode[npm publish]
   Release --> PublishPython[PyPI publish]
   Release --> PublishRust[crates.io publish]
-  Release --> BuildRust[Rust binary builds]
   Release --> GitHubRelease[GitHub Release]
 ```
 
@@ -75,13 +73,12 @@ Manual workflows for publishing pre-release versions (alpha, beta, rc):
   - **Trigger:** Automatically on push of `v*` tags
   - Runs tests for all languages
   - Publishes to npm, PyPI, and crates.io
-  - Builds Rust binaries for multiple platforms
   - Creates GitHub Release
   - Sends Slack notifications
 
 - **[`validate-release.yml`](workflows/validate-release.yml)** - Validate release artifacts
   - **Trigger:** Automatically after release completes
-  - Verifies published packages (npm, PyPI, crates.io) and binaries
+  - Verifies published packages (npm, PyPI, crates.io)
 
 - **[`rollback.yml`](workflows/rollback.yml)** - Rollback to a previous version
   - **Trigger:** Manual dispatch
@@ -203,12 +200,11 @@ flowchart TD
 
 2. **Release:** `release.yml` automatically triggers on tag push
    - Tests all SDKs
-   - Publishes packages
-   - Builds binaries
+   - Publishes packages to npm, PyPI, crates.io
    - Creates GitHub Release
 
 3. **Validation:** `validate-release.yml` runs automatically
-   - Verifies all artifacts were published correctly
+   - Verifies packages are available on npm, PyPI, crates.io
 
 4. **Rollback (if needed):** Run `rollback.yml` manually
    - Specify target version and reason

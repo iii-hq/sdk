@@ -73,58 +73,6 @@ jobs:
             echo "has_slack_ts=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Validate Rust binaries
-        id: validate_binaries
-        run: |
-          TAG="${{ steps.get_tag.outputs.tag }}"
-          if [ -z "$TAG" ]; then exit 0; fi
-          
-          mkdir -p release-assets
-          cd release-assets
-          gh release download "$TAG" || { echo "Failed to download release assets"; exit 1; }
-          
-          EXPECTED_PLATFORMS=(
-            "x86_64-apple-darwin"
-            "aarch64-apple-darwin"
-            "x86_64-pc-windows-msvc"
-            "i686-pc-windows-msvc"
-            "aarch64-pc-windows-msvc"
-            "x86_64-unknown-linux-gnu"
-            "x86_64-unknown-linux-musl"
-            "aarch64-unknown-linux-gnu"
-            "armv7-unknown-linux-gnueabihf"
-          )
-          
-          MISSING=()
-          for platform in "${EXPECTED_PLATFORMS[@]}"; do
-            if [[ "$platform" == *"windows"* ]]; then
-              FILE="iii-${platform}.zip"
-            else
-              FILE="iii-${platform}.tar.gz"
-            fi
-            
-            if [ ! -f "$FILE" ]; then
-              echo "Missing: $FILE"
-              MISSING+=("$platform")
-            else
-              SIZE=$(stat -c%s "$FILE" 2>/dev/null || stat -f%z "$FILE" 2>/dev/null)
-              if [ "$SIZE" -lt 100000 ]; then
-                echo "Warning: $FILE is suspiciously small ($SIZE bytes)"
-                MISSING+=("$platform (too small)")
-              else
-                echo "OK: $FILE ($SIZE bytes)"
-              fi
-            fi
-          done
-          
-          if [ ${#MISSING[@]} -gt 0 ]; then
-            echo "binaries_ok=false" >> $GITHUB_OUTPUT
-            echo "missing=${MISSING[*]}" >> $GITHUB_OUTPUT
-          else
-            echo "binaries_ok=true" >> $GITHUB_OUTPUT
-            echo "All 9 platform binaries validated"
-          fi
-
       - name: Validate Node SDK on npm
         id: validate_node
         continue-on-error: true
@@ -187,9 +135,7 @@ jobs:
           echo "Rust SDK $VERSION not found on crates.io after retries"
 
       - name: Update Slack - Validation Success
-        if: >-
-          steps.validate_binaries.outputs.binaries_ok == 'true' &&
-          steps.get_slack_ts.outputs.has_slack_ts == 'true'
+        if: steps.get_slack_ts.outputs.has_slack_ts == 'true'
         uses: slackapi/slack-github-action@v2.0.0
         with:
           method: chat.update
@@ -202,7 +148,7 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Release ${{ steps.get_tag.outputs.tag }}* :white_check_mark:\n\n:white_check_mark: Rust binaries (9/9)\n:${{ steps.validate_node.outputs.node_ok == 'true' && 'white_check_mark' || 'warning' }}: Node SDK on npm\n:${{ steps.validate_python.outputs.python_ok == 'true' && 'white_check_mark' || 'warning' }}: Python SDK on PyPI\n:${{ steps.validate_rust.outputs.rust_ok == 'true' && 'white_check_mark' || 'warning' }}: Rust SDK on crates.io"
+                  text: "*Release ${{ steps.get_tag.outputs.tag }}* :white_check_mark:\n\n:${{ steps.validate_node.outputs.node_ok == 'true' && 'white_check_mark' || 'warning' }}: Node SDK on npm\n:${{ steps.validate_python.outputs.python_ok == 'true' && 'white_check_mark' || 'warning' }}: Python SDK on PyPI\n:${{ steps.validate_rust.outputs.rust_ok == 'true' && 'white_check_mark' || 'warning' }}: Rust SDK on crates.io"
               - type: "actions"
                 elements:
                   - type: "button"
@@ -211,44 +157,6 @@ jobs:
                       text: "Download Release"
                     url: "${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.get_tag.outputs.tag }}"
                     style: "primary"
-
-      - name: Update Slack - Validation Failed
-        if: >-
-          steps.validate_binaries.outputs.binaries_ok != 'true' &&
-          steps.get_slack_ts.outputs.has_slack_ts == 'true'
-        uses: slackapi/slack-github-action@v2.0.0
-        with:
-          method: chat.update
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          payload: |
-            channel: ${{ secrets.SLACK_CHANNEL_ID }}
-            ts: ${{ steps.get_slack_ts.outputs.slack_ts }}
-            text: "Release ${{ steps.get_tag.outputs.tag }} validation failed"
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "*Release ${{ steps.get_tag.outputs.tag }}* :x:\n\nMissing binaries: ${{ steps.validate_binaries.outputs.missing }}\n\nAuto-rollback will be initiated"
-              - type: "context"
-                elements:
-                  - type: "mrkdwn"
-                    text: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
-
-      - name: Trigger auto-rollback
-        if: steps.validate_binaries.outputs.binaries_ok != 'true'
-        run: |
-          TAG="${{ steps.get_tag.outputs.tag }}"
-          PREVIOUS_TAG=$(git tag -l "v*" | sort -V | grep -B1 "^${TAG}$" | head -n1)
-          
-          if [ -z "$PREVIOUS_TAG" ] || [ "$PREVIOUS_TAG" == "$TAG" ]; then
-            echo "No previous version found for rollback"
-            exit 1
-          fi
-          
-          gh workflow run rollback.yml \
-            -f target_version="$PREVIOUS_TAG" \
-            -f reason="Auto-rollback: Release validation failed - missing platforms: ${{ steps.validate_binaries.outputs.missing }}" \
-            -f delete_bad_release=true
 
       - name: Summary
         if: always()
@@ -260,7 +168,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Artifact | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Rust binaries | ${{ steps.validate_binaries.outputs.binaries_ok == 'true' && 'OK' || 'FAILED' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Node SDK (npm) | ${{ steps.validate_node.outputs.node_ok == 'true' && 'OK' || 'NOT FOUND' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Python SDK (PyPI) | ${{ steps.validate_python.outputs.python_ok == 'true' && 'OK' || 'NOT FOUND' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Rust SDK (crates.io) | ${{ steps.validate_rust.outputs.rust_ok == 'true' && 'OK' || 'NOT FOUND' }} |" >> $GITHUB_STEP_SUMMARY

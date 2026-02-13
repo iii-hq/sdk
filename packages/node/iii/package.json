@@ -27,6 +27,11 @@
       "import": "./dist/stream.mjs",
       "require": "./dist/stream.cjs"
     },
+    "./state": {
+      "types": "./dist/state.d.ts",
+      "import": "./dist/state.mjs",
+      "require": "./dist/state.cjs"
+    },
     "./telemetry": {
       "types": "./dist/telemetry.d.ts",
       "import": "./dist/telemetry.mjs",

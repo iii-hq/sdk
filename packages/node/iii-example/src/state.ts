@@ -1,9 +1,22 @@
 import { iii } from './iii'
+import type {
+  IState,
+  StateDeleteInput,
+  StateDeleteResult,
+  StateGetInput,
+  StateListInput,
+  StateSetInput,
+  StateSetResult,
+  StateUpdateInput,
+  StateUpdateResult,
+} from 'iii-sdk/state'
 
-export const state = {
-  get: <T>(scope: string, key: string): Promise<T | null> => iii.call('state.get', { scope, key }),
-  set: <T>(scope: string, key: string, data: T): Promise<T> =>
-    iii.call('state.set', { scope, key, data }),
-  delete: (scope: string, key: string): Promise<void> => iii.call('state.delete', { scope, key }),
-  list: <T>(scope: string): Promise<T[]> => iii.call('state.list', { scope }),
+export const state: IState = {
+  get: <TData>(input: StateGetInput): Promise<TData | null> => iii.call('state.get', input),
+  set: <TData>(input: StateSetInput): Promise<StateSetResult<TData> | null> =>
+    iii.call('state.set', input),
+  delete: (input: StateDeleteInput): Promise<StateDeleteResult> => iii.call('state.delete', input),
+  list: <TData>(input: StateListInput): Promise<TData[]> => iii.call('state.list', input),
+  update: <TData>(input: StateUpdateInput): Promise<StateUpdateResult<TData> | null> =>
+    iii.call('state.update', input),
 }

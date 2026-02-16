@@ -285,7 +285,7 @@ class III:
         trigger_id = str(uuid.uuid4())
         msg = RegisterTriggerMessage(
             id=trigger_id,
-            type=type,
+            trigger_type=type,
             function_id=function_id,
             config=config,
         )
@@ -294,7 +294,7 @@ class III:
 
         def unregister() -> None:
             self._triggers.pop(trigger_id, None)
-            self._send_if_connected(UnregisterTriggerMessage(id=trigger_id, type=msg.type))
+            self._send_if_connected(UnregisterTriggerMessage(id=trigger_id, trigger_type=msg.type))
 
         return Trigger(unregister)
 

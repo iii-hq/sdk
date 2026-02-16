@@ -152,7 +152,11 @@ class Sdk implements ISdk {
 
   registerTrigger = (trigger: Omit<RegisterTriggerMessage, 'message_type' | 'id'>): Trigger => {
     const id = crypto.randomUUID()
-    const fullTrigger: RegisterTriggerMessage = { ...trigger, id, message_type: MessageType.RegisterTrigger }
+    const fullTrigger: RegisterTriggerMessage = {
+      ...trigger,
+      id,
+      message_type: MessageType.RegisterTrigger,
+    }
     this.sendMessage(MessageType.RegisterTrigger, fullTrigger, true)
     this.triggers.set(id, fullTrigger)
 
@@ -567,9 +571,9 @@ class Sdk implements ISdk {
     this.messagesToSend = []
     for (const message of pending) {
       if (
-        message['type'] === MessageType.InvokeFunction &&
-        typeof message['invocation_id'] === 'string' &&
-        !this.invocations.has(message['invocation_id'])
+        message.type === MessageType.InvokeFunction &&
+        typeof message.invocation_id === 'string' &&
+        !this.invocations.has(message.invocation_id)
       ) {
         continue
       }
@@ -597,7 +601,10 @@ class Sdk implements ISdk {
     }
   }
 
-  private toWireFormat(messageType: MessageType, message: Omit<IIIMessage, 'message_type'>): Record<string, unknown> {
+  private toWireFormat(
+    messageType: MessageType,
+    message: Omit<IIIMessage, 'message_type'>,
+  ): Record<string, unknown> {
     const { message_type: _, ...rest } = message as Record<string, unknown>
     if (messageType === MessageType.RegisterTrigger && 'type' in message) {
       const { type: triggerType, ...triggerRest } = message as RegisterTriggerMessage
@@ -726,7 +733,12 @@ class Sdk implements ISdk {
     }
   }
 
-  private async onRegisterTrigger(message: { trigger_type: string; id: string; function_id: string; config: unknown }) {
+  private async onRegisterTrigger(message: {
+    trigger_type: string
+    id: string
+    function_id: string
+    config: unknown
+  }) {
     const { trigger_type, id, function_id, config } = message
     const triggerTypeData = this.triggerTypes.get(trigger_type)
 
@@ -781,7 +793,9 @@ class Sdk implements ISdk {
         message as InvokeFunctionMessage
       this.onInvokeFunction(invocation_id, function_id, data, traceparent, baggage)
     } else if (msgType === MessageType.RegisterTrigger) {
-      this.onRegisterTrigger(message as { trigger_type: string; id: string; function_id: string; config: unknown })
+      this.onRegisterTrigger(
+        message as { trigger_type: string; id: string; function_id: string; config: unknown },
+      )
     } else if (msgType === MessageType.WorkerRegistered) {
       const { worker_id } = message as WorkerRegisteredMessage
       this.workerId = worker_id

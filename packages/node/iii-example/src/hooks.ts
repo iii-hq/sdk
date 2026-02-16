@@ -1,14 +1,15 @@
 import { type ApiRequest, type ApiResponse, type Context, getContext } from 'iii-sdk'
 import { iii } from './iii'
 
-export const useApi = (
+// biome-ignore lint/suspicious/noExplicitAny: generic default requires any for handler flexibility
+export const useApi = <TBody = any>(
   config: {
     api_path: string
     http_method: string
     description?: string
     metadata?: Record<string, unknown>
   },
-  handler: (req: ApiRequest<unknown>, context: Context) => Promise<ApiResponse>,
+  handler: (req: ApiRequest<TBody>, context: Context) => Promise<ApiResponse>,
 ) => {
   const function_id = `api.${config.http_method.toLowerCase()}.${config.api_path}`
 

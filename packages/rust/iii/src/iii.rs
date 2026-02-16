@@ -50,7 +50,7 @@ use crate::telemetry::types::OtelConfig;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Worker information returned by `engine.workers.list`
+/// Worker information returned by `engine::workers::list`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerInfo {
     pub id: String,
@@ -66,7 +66,7 @@ pub struct WorkerInfo {
     pub active_invocations: usize,
 }
 
-/// Function information returned by `engine.functions.list`
+/// Function information returned by `engine::functions::list`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionInfo {
     pub function_id: String,
@@ -76,7 +76,7 @@ pub struct FunctionInfo {
     pub metadata: Option<Value>,
 }
 
-/// Trigger information returned by `engine.triggers.list`
+/// Trigger information returned by `engine::triggers::list`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TriggerInfo {
     pub id: String,
@@ -554,7 +554,7 @@ impl III {
     /// List all registered functions from the engine
     pub async fn list_functions(&self) -> Result<Vec<FunctionInfo>, IIIError> {
         let result = self
-            .call("engine.functions.list", serde_json::json!({}))
+            .call("engine::functions::list", serde_json::json!({}))
             .await?;
 
         let functions = result
@@ -649,7 +649,7 @@ impl III {
     /// List all connected workers from the engine
     pub async fn list_workers(&self) -> Result<Vec<WorkerInfo>, IIIError> {
         let result = self
-            .call("engine.workers.list", serde_json::json!({}))
+            .call("engine::workers::list", serde_json::json!({}))
             .await?;
 
         let workers = result
@@ -663,7 +663,7 @@ impl III {
     /// List all registered triggers from the engine
     pub async fn list_triggers(&self) -> Result<Vec<TriggerInfo>, IIIError> {
         let result = self
-            .call("engine.triggers.list", serde_json::json!({}))
+            .call("engine::triggers::list", serde_json::json!({}))
             .await?;
 
         let triggers = result
@@ -677,7 +677,7 @@ impl III {
     /// Register this worker's metadata with the engine (called automatically on connect)
     fn register_worker_metadata(&self) {
         if let Some(metadata) = self.inner.worker_metadata.lock_or_recover().clone() {
-            let _ = self.call_void("engine.workers.register", metadata);
+            let _ = self.call_void("engine::workers::register", metadata);
         }
     }
 

@@ -47,23 +47,23 @@ class Logger:
     def info(self, message: str, data: Any = None) -> None:
         """Log an info message."""
         if self._invoker:
-            self._invoker("engine.log.info", self._build_params(message, data))
+            self._invoker("engine::log::info", self._build_params(message, data))
         log.info(f"[{self._function_name}] {message}", extra={"data": data})
 
     def warn(self, message: str, data: Any = None) -> None:
         """Log a warning message."""
         if self._invoker:
-            self._invoker("engine.log.warn", self._build_params(message, data))
+            self._invoker("engine::log::warn", self._build_params(message, data))
         log.warning(f"[{self._function_name}] {message}", extra={"data": data})
 
     def error(self, message: str, data: Any = None) -> None:
         """Log an error message."""
         if self._invoker:
-            self._invoker("engine.log.error", self._build_params(message, data))
+            self._invoker("engine::log::error", self._build_params(message, data))
         log.error(f"[{self._function_name}] {message}", extra={"data": data})
 
     def debug(self, message: str, data: Any = None) -> None:
         """Log a debug message."""
         if self._invoker:
-            self._invoker("engine.log.debug", self._build_params(message, data))
+            self._invoker("engine::log::debug", self._build_params(message, data))
         log.debug(f"[{self._function_name}] {message}", extra={"data": data})

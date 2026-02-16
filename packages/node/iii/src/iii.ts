@@ -293,12 +293,12 @@ class Sdk implements ISdk {
   }
 
   createStream = <TData>(streamName: string, stream: IStream<TData>): void => {
-    this.registerFunction({ id: `stream.get(${streamName})` }, stream.get.bind(stream))
-    this.registerFunction({ id: `stream.set(${streamName})` }, stream.set.bind(stream))
-    this.registerFunction({ id: `stream.delete(${streamName})` }, stream.delete.bind(stream))
-    this.registerFunction({ id: `stream.list(${streamName})` }, stream.list.bind(stream))
+    this.registerFunction({ id: `stream::get(${streamName})` }, stream.get.bind(stream))
+    this.registerFunction({ id: `stream::set(${streamName})` }, stream.set.bind(stream))
+    this.registerFunction({ id: `stream::delete(${streamName})` }, stream.delete.bind(stream))
+    this.registerFunction({ id: `stream::list(${streamName})` }, stream.list.bind(stream))
     this.registerFunction(
-      { id: `stream.list_groups(${streamName})` },
+      { id: `stream::list_groups(${streamName})` },
       stream.listGroups.bind(stream),
     )
   }

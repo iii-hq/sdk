@@ -47,7 +47,7 @@ iii.createStream('todo', {
       description: input.data.description,
       dueDate: input.data.dueDate,
       completedAt: null,
-      createdAt: input.data.createdAt,
+      createdAt: input.data?.createdAt ?? new Date().toISOString(),
     }
 
     todoState.push(newTodo)

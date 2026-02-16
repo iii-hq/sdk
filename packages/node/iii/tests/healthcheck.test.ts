@@ -25,7 +25,7 @@ describe.skipIf(skipIfServerUnavailable())('Healthcheck Endpoint', () => {
     })
 
     const trigger = iii.registerTrigger({
-      trigger_type: 'api',
+      trigger_type: 'http',
       function_id: fn.id,
       config: {
         api_path: 'health',

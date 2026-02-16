@@ -21,7 +21,7 @@ def use_api(
 
     iii.register_function(function_id, wrapped)
     iii.register_trigger(
-        trigger_type="api",
+        trigger_type="http",
         function_id=function_id,
         config={
             "api_path": api_path,

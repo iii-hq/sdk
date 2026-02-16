@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { StateEventType, type StateEventData, type StateSetResult } from '../src/state'
 import type { FunctionRef, Trigger } from '../src/types'
-import { skipIfServerUnavailable } from './setup'
 import { execute, iii, logger } from './utils'
 
 type TestData = {
@@ -10,7 +9,7 @@ type TestData = {
   updated?: boolean
 }
 
-describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
+describe('State Operations', () => {
   const scope = 'test-scope'
   const key = 'test-item'
 

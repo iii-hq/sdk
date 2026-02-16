@@ -81,10 +81,10 @@ export type RemoteTriggerTypeData = {
   handler: TriggerHandler<any>
 }
 
-export type RegisterTriggerInput = Omit<RegisterTriggerMessage, 'type' | 'id'>
-export type RegisterServiceInput = Omit<RegisterServiceMessage, 'type'>
-export type RegisterFunctionInput = Omit<RegisterFunctionMessage, 'type'>
-export type RegisterTriggerTypeInput = Omit<RegisterTriggerTypeMessage, 'type'>
+export type RegisterTriggerInput = Omit<RegisterTriggerMessage, 'message_type' | 'id'>
+export type RegisterServiceInput = Omit<RegisterServiceMessage, 'message_type'>
+export type RegisterFunctionInput = Omit<RegisterFunctionMessage, 'message_type'>
+export type RegisterTriggerTypeInput = Omit<RegisterTriggerTypeMessage, 'message_type'>
 export type FunctionsAvailableCallback = (functions: FunctionInfo[]) => void
 
 export interface ISdk {

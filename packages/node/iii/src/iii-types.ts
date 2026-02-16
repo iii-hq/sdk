@@ -13,49 +13,41 @@ export enum MessageType {
 }
 
 export type RegisterTriggerTypeMessage = {
-  type: MessageType.RegisterTriggerType
+  message_type: MessageType.RegisterTriggerType
   id: string
   description: string
 }
 
 export type UnregisterTriggerTypeMessage = {
-  type: MessageType.UnregisterTriggerType
+  message_type: MessageType.UnregisterTriggerType
   id: string
 }
 
 export type UnregisterTriggerMessage = {
-  type: MessageType.UnregisterTrigger
+  message_type: MessageType.UnregisterTrigger
   id: string
+  type?: string
 }
 
 export type TriggerRegistrationResultMessage = {
-  type: MessageType.TriggerRegistrationResult
+  message_type: MessageType.TriggerRegistrationResult
   id: string
-  trigger_type: string
+  type: string
   function_id: string
   result?: unknown
   error?: unknown
 }
 
 export type RegisterTriggerMessage = {
-  type: MessageType.RegisterTrigger
-
+  message_type: MessageType.RegisterTrigger
   id: string
-  /**
-   * The type of trigger. Can be 'cron', 'event', 'http', etc.
-   */
-  trigger_type: string
-  /**
-   * Engine path for the function, including the service and function name
-   * Example: software.engineering.code.rust
-   * Where software, engineering, and code are the service ids
-   */
+  type: string
   function_id: string
   config: unknown
 }
 
 export type RegisterServiceMessage = {
-  type: MessageType.RegisterService
+  message_type: MessageType.RegisterService
   id: string
   description?: string
   parent_service_id?: string
@@ -86,7 +78,7 @@ export type RegisterFunctionFormat = {
 }
 
 export type RegisterFunctionMessage = {
-  type: MessageType.RegisterFunction
+  message_type: MessageType.RegisterFunction
   /**
    * The path of the function
    */
@@ -107,7 +99,7 @@ export type RegisterFunctionMessage = {
 }
 
 export type InvokeFunctionMessage = {
-  type: MessageType.InvokeFunction
+  message_type: MessageType.InvokeFunction
   /**
    * This is optional for async invocations
    */
@@ -131,7 +123,7 @@ export type InvokeFunctionMessage = {
 }
 
 export type InvocationResultMessage = {
-  type: MessageType.InvocationResult
+  message_type: MessageType.InvocationResult
   /**
    * The id of the invocation
    */
@@ -177,12 +169,12 @@ export type WorkerInfo = {
 }
 
 export type WorkerRegisteredMessage = {
-  type: MessageType.WorkerRegistered
+  message_type: MessageType.WorkerRegistered
   worker_id: string
 }
 
 export type UnregisterFunctionMessage = {
-  type: MessageType.UnregisterFunction
+  message_type: MessageType.UnregisterFunction
   id: string
 }
 

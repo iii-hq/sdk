@@ -134,7 +134,7 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
         )
 
         trigger = iii.registerTrigger({
-          trigger_type: 'state',
+          type: 'state',
           function_id: stateUpdatedFunction.id,
           config: { scope, key },
         })

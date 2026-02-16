@@ -21,61 +21,56 @@ class MessageType(str, Enum):
 
 
 class RegisterTriggerTypeMessage(BaseModel):
-    """Message for registering a trigger type."""
+    model_config = ConfigDict(populate_by_name=True)
 
     id: str
     description: str
-    type: MessageType = MessageType.REGISTER_TRIGGER_TYPE
+    message_type: MessageType = Field(default=MessageType.REGISTER_TRIGGER_TYPE, alias="type")
 
 
 class UnregisterTriggerTypeMessage(BaseModel):
-    """Message for unregistering a trigger type."""
+    model_config = ConfigDict(populate_by_name=True)
 
     id: str
-    type: MessageType = MessageType.UNREGISTER_TRIGGER_TYPE
+    message_type: MessageType = Field(default=MessageType.UNREGISTER_TRIGGER_TYPE, alias="type")
 
 
 class UnregisterTriggerMessage(BaseModel):
-    """Message for unregistering a trigger."""
+    model_config = ConfigDict(populate_by_name=True)
 
     id: str
-    type: MessageType = MessageType.UNREGISTER_TRIGGER
+    message_type: MessageType = Field(default=MessageType.UNREGISTER_TRIGGER, alias="type")
+    type: str | None = Field(default=None, alias="trigger_type")
 
 
 class TriggerRegistrationResultMessage(BaseModel):
-    """Message for trigger registration result."""
-
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
-    trigger_type: str = Field()
+    type: str = Field(alias="trigger_type")
     function_id: str = Field()
     result: Any = None
     error: Any = None
-    type: MessageType = MessageType.TRIGGER_REGISTRATION_RESULT
+    message_type: MessageType = Field(default=MessageType.TRIGGER_REGISTRATION_RESULT, alias="type")
 
 
 class RegisterTriggerMessage(BaseModel):
-    """Message for registering a trigger."""
-
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
-    trigger_type: str = Field()
+    type: str = Field(alias="trigger_type")
     function_id: str = Field()
     config: Any
-    type: MessageType = MessageType.REGISTER_TRIGGER
+    message_type: MessageType = Field(default=MessageType.REGISTER_TRIGGER, alias="type")
 
 
 class RegisterServiceMessage(BaseModel):
-    """Message for registering a service."""
-
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
     description: str | None = None
     parent_service_id: str | None = Field(default=None)
-    type: MessageType = MessageType.REGISTER_SERVICE
+    message_type: MessageType = Field(default=MessageType.REGISTER_SERVICE, alias="type")
 
 
 class RegisterFunctionFormat(BaseModel):
@@ -90,8 +85,6 @@ class RegisterFunctionFormat(BaseModel):
 
 
 class RegisterFunctionMessage(BaseModel):
-    """Message for registering a function."""
-
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field()
@@ -99,30 +92,26 @@ class RegisterFunctionMessage(BaseModel):
     request_format: RegisterFunctionFormat | None = Field(default=None)
     response_format: RegisterFunctionFormat | None = Field(default=None)
     metadata: dict[str, Any] | None = None
-    type: MessageType = MessageType.REGISTER_FUNCTION
+    message_type: MessageType = Field(default=MessageType.REGISTER_FUNCTION, alias="type")
 
 
 class InvokeFunctionMessage(BaseModel):
-    """Message for invoking a function."""
-
     model_config = ConfigDict(populate_by_name=True)
 
     function_id: str = Field()
     data: Any
     invocation_id: str | None = Field(default=None)
-    type: MessageType = MessageType.INVOKE_FUNCTION
+    message_type: MessageType = Field(default=MessageType.INVOKE_FUNCTION, alias="type")
 
 
 class InvocationResultMessage(BaseModel):
-    """Message for invocation result."""
-
     model_config = ConfigDict(populate_by_name=True)
 
     invocation_id: str = Field()
     function_id: str = Field()
     result: Any = None
     error: Any = None
-    type: MessageType = MessageType.INVOCATION_RESULT
+    message_type: MessageType = Field(default=MessageType.INVOCATION_RESULT, alias="type")
 
 
 class FunctionInfo(BaseModel):

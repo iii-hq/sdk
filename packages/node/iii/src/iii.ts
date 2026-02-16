@@ -20,6 +20,7 @@ import {
   type RegisterServiceMessage,
   type RegisterTriggerMessage,
   type RegisterTriggerTypeMessage,
+  type TriggerRegistrationResultMessage,
   type WorkerInfo,
   type WorkerRegisteredMessage,
 } from './iii-types'
@@ -99,7 +100,7 @@ class Sdk implements ISdk {
   private logCallbacks = new Map<LogCallback, LogConfig>()
   private logTrigger?: Trigger
   private logFunctionPath?: string
-  private messagesToSend: IIIMessage[] = []
+  private messagesToSend: Record<string, unknown>[] = []
   private workerName: string
   private workerId?: string
   private reconnectTimeout?: NodeJS.Timeout
@@ -130,12 +131,12 @@ class Sdk implements ISdk {
   }
 
   registerTriggerType = <TConfig>(
-    triggerType: Omit<RegisterTriggerTypeMessage, 'type'>,
+    triggerType: Omit<RegisterTriggerTypeMessage, 'message_type'>,
     handler: TriggerHandler<TConfig>,
   ): void => {
     this.sendMessage(MessageType.RegisterTriggerType, triggerType, true)
     this.triggerTypes.set(triggerType.id, {
-      message: { ...triggerType, type: MessageType.RegisterTriggerType },
+      message: { ...triggerType, message_type: MessageType.RegisterTriggerType },
       handler,
     })
   }
@@ -144,21 +145,27 @@ class Sdk implements ISdk {
     this.ws?.on(event, callback)
   }
 
-  unregisterTriggerType = (triggerType: Omit<RegisterTriggerTypeMessage, 'type'>): void => {
+  unregisterTriggerType = (triggerType: Omit<RegisterTriggerTypeMessage, 'message_type'>): void => {
     this.sendMessage(MessageType.UnregisterTriggerType, triggerType, true)
     this.triggerTypes.delete(triggerType.id)
   }
 
-  registerTrigger = (trigger: Omit<RegisterTriggerMessage, 'type' | 'id'>): Trigger => {
+  registerTrigger = (trigger: Omit<RegisterTriggerMessage, 'message_type' | 'id'>): Trigger => {
     const id = crypto.randomUUID()
-    this.sendMessage(MessageType.RegisterTrigger, { ...trigger, id }, true)
-    this.triggers.set(id, { ...trigger, id, type: MessageType.RegisterTrigger })
+    const fullTrigger: RegisterTriggerMessage = {
+      ...trigger,
+      id,
+      message_type: MessageType.RegisterTrigger,
+    }
+    this.sendMessage(MessageType.RegisterTrigger, fullTrigger, true)
+    this.triggers.set(id, fullTrigger)
 
     return {
       unregister: () => {
         this.sendMessage(MessageType.UnregisterTrigger, {
           id,
-          trigger_type: MessageType.UnregisterTrigger,
+          message_type: MessageType.UnregisterTrigger,
+          type: fullTrigger.type,
         })
         this.triggers.delete(id)
       },
@@ -166,7 +173,7 @@ class Sdk implements ISdk {
   }
 
   registerFunction = (
-    message: Omit<RegisterFunctionMessage, 'type'>,
+    message: Omit<RegisterFunctionMessage, 'message_type'>,
     handler: RemoteFunctionHandler,
   ): FunctionRef => {
     if (!message.id || message.id.trim() === '') {
@@ -175,7 +182,7 @@ class Sdk implements ISdk {
 
     this.sendMessage(MessageType.RegisterFunction, message, true)
     this.functions.set(message.id, {
-      message: { ...message, type: MessageType.RegisterFunction },
+      message: { ...message, message_type: MessageType.RegisterFunction },
       handler: async (input, traceparent?: string, baggage?: string) => {
         // If we have a tracer, wrap in a span and pass it to the context
         if (getTracer()) {
@@ -212,9 +219,9 @@ class Sdk implements ISdk {
     }
   }
 
-  registerService = (message: Omit<RegisterServiceMessage, 'type'>): void => {
+  registerService = (message: Omit<RegisterServiceMessage, 'message_type'>): void => {
     this.sendMessage(MessageType.RegisterService, message, true)
-    this.services.set(message.id, { ...message, type: MessageType.RegisterService })
+    this.services.set(message.id, { ...message, message_type: MessageType.RegisterService })
   }
 
   call = async <TInput, TOutput>(
@@ -324,7 +331,7 @@ class Sdk implements ISdk {
       }
 
       this.functionsAvailableTrigger = this.registerTrigger({
-        trigger_type: EngineTriggers.FUNCTIONS_AVAILABLE,
+        type: EngineTriggers.FUNCTIONS_AVAILABLE,
         function_id,
         config: {},
       })
@@ -366,7 +373,7 @@ class Sdk implements ISdk {
       }
 
       this.logTrigger = this.registerTrigger({
-        trigger_type: EngineTriggers.LOG,
+        type: EngineTriggers.LOG,
         function_id,
         config: { level: 'all', severity_min: 0 },
       })
@@ -563,10 +570,9 @@ class Sdk implements ISdk {
     const pending = this.messagesToSend
     this.messagesToSend = []
     for (const message of pending) {
-      // Skip InvokeFunction messages for timed-out invocations
       if (
         message.type === MessageType.InvokeFunction &&
-        message.invocation_id &&
+        typeof message.invocation_id === 'string' &&
         !this.invocations.has(message.invocation_id)
       ) {
         continue
@@ -595,16 +601,36 @@ class Sdk implements ISdk {
     }
   }
 
+  private toWireFormat(
+    messageType: MessageType,
+    message: Omit<IIIMessage, 'message_type'>,
+  ): Record<string, unknown> {
+    const { message_type: _, ...rest } = message as Record<string, unknown>
+    if (messageType === MessageType.RegisterTrigger && 'type' in message) {
+      const { type: triggerType, ...triggerRest } = message as RegisterTriggerMessage
+      return { type: messageType, ...triggerRest, trigger_type: triggerType }
+    }
+    if (messageType === MessageType.UnregisterTrigger && 'type' in message) {
+      const { type: triggerType, ...triggerRest } = message as RegisterTriggerMessage
+      return { type: messageType, ...triggerRest, trigger_type: triggerType }
+    }
+    if (messageType === MessageType.TriggerRegistrationResult && 'type' in message) {
+      const { type: triggerType, ...resultRest } = message as TriggerRegistrationResultMessage
+      return { type: messageType, ...resultRest, trigger_type: triggerType }
+    }
+    return { type: messageType, ...rest } as Record<string, unknown>
+  }
+
   private sendMessage(
-    type: MessageType,
-    message: Omit<IIIMessage, 'type'>,
+    messageType: MessageType,
+    message: Omit<IIIMessage, 'message_type'>,
     skipIfClosed = false,
   ): void {
-    const fullMessage = { ...message, type }
+    const wireMessage = this.toWireFormat(messageType, message)
     if (this.isOpen()) {
-      this.sendMessageRaw(JSON.stringify(fullMessage))
+      this.sendMessageRaw(JSON.stringify(wireMessage))
     } else if (!skipIfClosed) {
-      this.messagesToSend.push(fullMessage as IIIMessage)
+      this.messagesToSend.push(wireMessage)
     }
   }
 
@@ -707,18 +733,29 @@ class Sdk implements ISdk {
     }
   }
 
-  private async onRegisterTrigger(message: RegisterTriggerMessage) {
-    const triggerTypeData = this.triggerTypes.get(message.trigger_type)
-    const { id, trigger_type, function_id, config } = message
+  private async onRegisterTrigger(message: {
+    trigger_type: string
+    id: string
+    function_id: string
+    config: unknown
+  }) {
+    const { trigger_type, id, function_id, config } = message
+    const triggerTypeData = this.triggerTypes.get(trigger_type)
 
     if (triggerTypeData) {
       try {
         await triggerTypeData.handler.registerTrigger({ id, function_id, config })
-        this.sendMessage(MessageType.TriggerRegistrationResult, { id, trigger_type, function_id })
+        this.sendMessage(MessageType.TriggerRegistrationResult, {
+          id,
+          message_type: MessageType.TriggerRegistrationResult,
+          type: trigger_type,
+          function_id,
+        })
       } catch (error) {
         this.sendMessage(MessageType.TriggerRegistrationResult, {
           id,
-          trigger_type,
+          message_type: MessageType.TriggerRegistrationResult,
+          type: trigger_type,
           function_id,
           error: { code: 'trigger_registration_failed', message: (error as Error).message },
         })
@@ -726,7 +763,8 @@ class Sdk implements ISdk {
     } else {
       this.sendMessage(MessageType.TriggerRegistrationResult, {
         id,
-        trigger_type,
+        message_type: MessageType.TriggerRegistrationResult,
+        type: trigger_type,
         function_id,
         error: { code: 'trigger_type_not_found', message: 'Trigger type not found' },
       })
@@ -734,12 +772,12 @@ class Sdk implements ISdk {
   }
 
   private onMessage(socketMessage: Data): void {
-    let type: MessageType
-    let message: Omit<IIIMessage, 'type'>
+    let msgType: MessageType
+    let message: Record<string, unknown>
 
     try {
-      const parsed = JSON.parse(socketMessage.toString()) as IIIMessage
-      type = parsed.type
+      const parsed = JSON.parse(socketMessage.toString()) as Record<string, unknown>
+      msgType = parsed.type as MessageType
       const { type: _, ...rest } = parsed
       message = rest
     } catch (error) {
@@ -747,16 +785,18 @@ class Sdk implements ISdk {
       return
     }
 
-    if (type === MessageType.InvocationResult) {
+    if (msgType === MessageType.InvocationResult) {
       const { invocation_id, result, error } = message as InvocationResultMessage
       this.onInvocationResult(invocation_id, result, error)
-    } else if (type === MessageType.InvokeFunction) {
+    } else if (msgType === MessageType.InvokeFunction) {
       const { invocation_id, function_id, data, traceparent, baggage } =
         message as InvokeFunctionMessage
       this.onInvokeFunction(invocation_id, function_id, data, traceparent, baggage)
-    } else if (type === MessageType.RegisterTrigger) {
-      this.onRegisterTrigger(message as RegisterTriggerMessage)
-    } else if (type === MessageType.WorkerRegistered) {
+    } else if (msgType === MessageType.RegisterTrigger) {
+      this.onRegisterTrigger(
+        message as { trigger_type: string; id: string; function_id: string; config: unknown },
+      )
+    } else if (msgType === MessageType.WorkerRegistered) {
       const { worker_id } = message as WorkerRegisteredMessage
       this.workerId = worker_id
       console.debug('[iii] Worker registered with ID:', worker_id)

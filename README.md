@@ -40,7 +40,7 @@ iii.registerFunction({ id: 'myFunction' }, (req) => {
 })
 
 iii.registerTrigger({
-  trigger_type: 'http',
+  type: 'http',
   function_id: 'myFunction',
   config: { api_path: '/hello', http_method: 'POST' },
 })

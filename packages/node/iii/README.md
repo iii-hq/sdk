@@ -21,7 +21,7 @@ iii.registerFunction({ id: 'myFunction' }, (req) => {
 })
 
 iii.registerTrigger({
-  trigger_type: 'api',
+  trigger_type: 'http',
   function_id: 'myFunction',
   config: { api_path: 'myApiPath', http_method: 'POST' },
 })
@@ -44,7 +44,7 @@ III Allows you to register triggers that can be invoked by other services.
 
 ```javascript
 iii.registerTrigger({
-  trigger_type: 'api',
+  trigger_type: 'http',
   function_id: 'myFunction',
   config: { api_path: 'myApiPath', http_method: 'POST' },
 })

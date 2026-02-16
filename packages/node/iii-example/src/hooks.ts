@@ -17,7 +17,7 @@ export const useApi = <TBody = any>(
     handler(req, getContext()),
   )
   iii.registerTrigger({
-    trigger_type: 'api',
+    trigger_type: 'http',
     function_id,
     config: {
       api_path: config.api_path,

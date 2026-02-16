@@ -15,10 +15,10 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
   const key = 'test-item'
 
   beforeEach(async () => {
-    await iii.call('state.delete', { scope, key }).catch(() => void 0)
+    await iii.call('state::delete', { scope, key }).catch(() => void 0)
   })
 
-  describe('state.set', () => {
+  describe('state::set', () => {
     it('should set a new state item', async () => {
       const testData = {
         name: 'Test Item',
@@ -26,7 +26,7 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
         metadata: { created: new Date().toISOString() },
       }
 
-      const result = await iii.call('state.set', {
+      const result = await iii.call('state::set', {
         scope,
         key,
         data: testData,
@@ -40,9 +40,9 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
       const initialData: TestData = { value: 1 }
       const updatedData: TestData = { value: 2, updated: true }
 
-      await iii.call('state.set', { scope, key, data: initialData })
+      await iii.call('state::set', { scope, key, data: initialData })
 
-      const result: StateSetResult<TestData> = await iii.call('state.set', {
+      const result: StateSetResult<TestData> = await iii.call('state::set', {
         scope,
         key,
         data: updatedData,
@@ -53,38 +53,38 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
     })
   })
 
-  describe('state.get', () => {
+  describe('state::get', () => {
     it('should get an existing state item', async () => {
       const data: TestData = { name: 'Test', value: 100 }
 
-      await iii.call('state.set', { scope, key, data })
+      await iii.call('state::set', { scope, key, data })
 
-      const result: TestData = await iii.call('state.get', { scope, key })
+      const result: TestData = await iii.call('state::get', { scope, key })
 
       expect(result).toBeDefined()
       expect(result).toEqual(data)
     })
 
     it('should return null for non-existent item', async () => {
-      const result = await iii.call('state.get', { scope, key: 'non-existent-item' })
+      const result = await iii.call('state::get', { scope, key: 'non-existent-item' })
 
       expect(result).toBeUndefined()
     })
   })
 
-  describe('state.delete', () => {
+  describe('state::delete', () => {
     it('should delete an existing state item', async () => {
-      await iii.call('state.set', { scope, key, data: { test: true } })
-      await iii.call('state.delete', { scope, key })
-      await expect(iii.call('state.get', { scope, key })).resolves.toBeUndefined()
+      await iii.call('state::set', { scope, key, data: { test: true } })
+      await iii.call('state::delete', { scope, key })
+      await expect(iii.call('state::get', { scope, key })).resolves.toBeUndefined()
     })
 
     it('should handle deleting non-existent item gracefully', async () => {
-      await expect(iii.call('state.delete', { scope, key: 'non-existent' })).resolves.not.toThrow()
+      await expect(iii.call('state::delete', { scope, key: 'non-existent' })).resolves.not.toThrow()
     })
   })
 
-  describe('state.list', () => {
+  describe('state::list', () => {
     it('should get all items in a scope', async () => {
       type TestDataWithId = TestData & { id: string }
 
@@ -97,10 +97,10 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
 
       // Set multiple items
       for (const item of items) {
-        await iii.call('state.set', { scope, key: item.id, data: item })
+        await iii.call('state::set', { scope, key: item.id, data: item })
       }
 
-      const result: TestDataWithId[] = await iii.call('state.list', { scope })
+      const result: TestDataWithId[] = await iii.call('state::list', { scope })
       const sort = (a: TestDataWithId, b: TestDataWithId) => a.id.localeCompare(b.id)
 
       expect(Array.isArray(result)).toBe(true)
@@ -115,7 +115,7 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
       const updatedData: TestData = { name: 'New Test Data', value: 200 }
       const reactiveResult: { data?: TestData; called: boolean } = { called: false }
 
-      await iii.call('state.set', { scope, key, data })
+      await iii.call('state::set', { scope, key, data })
 
       let trigger: Trigger | undefined
       let stateUpdatedFunction: FunctionRef | undefined
@@ -139,7 +139,7 @@ describe.skipIf(skipIfServerUnavailable())('State Operations', () => {
           config: { scope, key },
         })
 
-        await iii.call('state.set', { scope, key, data: updatedData })
+        await iii.call('state::set', { scope, key, data: updatedData })
         await execute(async () => {
           expect(reactiveResult.called).toBe(true)
           expect(reactiveResult.data).toEqual(updatedData)

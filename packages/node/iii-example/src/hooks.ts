@@ -1,12 +1,4 @@
-import {
-  type ApiRequest,
-  type ApiResponse,
-  type Context,
-  type FunctionMessage,
-  getContext,
-  type LogCallback,
-  type LogConfig,
-} from 'iii-sdk'
+import { type ApiRequest, type ApiResponse, type Context, getContext } from 'iii-sdk'
 import { iii } from './iii'
 
 export const useApi = (
@@ -33,14 +25,4 @@ export const useApi = (
       metadata: config.metadata,
     },
   })
-}
-
-export const useFunctionsAvailable = (
-  callback: (functions: FunctionMessage[]) => void,
-): (() => void) => {
-  return iii.onFunctionsAvailable(callback)
-}
-
-export const useOnLog = (handler: LogCallback, config?: LogConfig): (() => void) => {
-  return iii.onLog(handler, config)
 }

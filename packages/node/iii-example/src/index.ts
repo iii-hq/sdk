@@ -115,7 +115,7 @@ useApi(
       dueDate: dueDate,
       completedAt: undefined,
     }
-    const todo = await state.set('todo', todoId, newTodo)
+    const todo = await state.set({ scope: 'todo', key: todoId, data: newTodo })
 
     return { status_code: 201, body: todo, headers: { 'Content-Type': 'application/json' } }
   },
@@ -127,7 +127,7 @@ useApi(
     ctx.logger.info('Getting todo', { ...req.path_params })
 
     const todoId = req.path_params.id
-    const todo = await state.get('todo', todoId)
+    const todo = await state.get({ scope: 'todo', key: todoId })
 
     return { status_code: 200, body: todo, headers: { 'Content-Type': 'application/json' } }
   },

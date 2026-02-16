@@ -4,9 +4,9 @@
 
 /** Engine function paths for internal operations */
 export const EngineFunctions = {
-  LIST_FUNCTIONS: 'engine.functions.list',
-  LIST_WORKERS: 'engine.workers.list',
-  REGISTER_WORKER: 'engine.workers.register',
+  LIST_FUNCTIONS: 'engine::functions::list',
+  LIST_WORKERS: 'engine::workers::list',
+  REGISTER_WORKER: 'engine::workers::register',
 } as const
 
 /** Engine trigger types */
@@ -17,10 +17,10 @@ export const EngineTriggers = {
 
 /** Log function paths */
 export const LogFunctions = {
-  INFO: 'log.info',
-  WARN: 'log.warn',
-  ERROR: 'log.error',
-  DEBUG: 'log.debug',
+  INFO: 'engine::log::info',
+  WARN: 'engine::log::warn',
+  ERROR: 'engine::log::error',
+  DEBUG: 'engine::log::debug',
 } as const
 
 /** Connection state for the III WebSocket */

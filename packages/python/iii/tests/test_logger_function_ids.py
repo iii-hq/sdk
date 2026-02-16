@@ -16,9 +16,9 @@ def test_logger_invokes_engine_log_function_ids() -> None:
     logger.debug("debug message")
 
     assert [function_id for function_id, _ in calls] == [
-        "engine.log.info",
-        "engine.log.warn",
-        "engine.log.error",
-        "engine.log.debug",
+        "engine::log::info",
+        "engine::log::warn",
+        "engine::log::error",
+        "engine::log::debug",
     ]
 

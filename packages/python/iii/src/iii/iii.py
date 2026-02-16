@@ -350,13 +350,13 @@ class III:
 
     async def list_functions(self) -> list[FunctionInfo]:
         """List all registered functions from the engine."""
-        result = await self.call("engine.functions.list", {})
+        result = await self.call("engine::functions::list", {})
         functions_data = result.get("functions", [])
         return [FunctionInfo(**f) for f in functions_data]
 
     async def list_workers(self) -> list[WorkerInfo]:
         """List all connected workers from the engine."""
-        result = await self.call("engine.workers.list", {})
+        result = await self.call("engine::workers::list", {})
         workers_data = result.get("workers", [])
         return [WorkerInfo(**w) for w in workers_data]
 
@@ -378,7 +378,7 @@ class III:
 
     def _register_worker_metadata(self) -> None:
         """Register this worker's metadata with the engine."""
-        self.call_void("engine.workers.register", self._get_worker_metadata())
+        self.call_void("engine::workers::register", self._get_worker_metadata())
 
     def on_functions_available(self, callback: Callable[[list[FunctionInfo]], None]) -> Callable[[], None]:
         """Subscribe to function availability events.
@@ -439,12 +439,12 @@ class III:
         """Register stream functions for a given stream.
 
         This registers the following functions for the stream:
-        - {stream_name}.get
-        - {stream_name}.set
-        - {stream_name}.delete
-        - {stream_name}.list
-        - {stream_name}.list_groups
-        - {stream_name}.update
+        - {stream_name}::get
+        - {stream_name}::set
+        - {stream_name}::delete
+        - {stream_name}::list
+        - {stream_name}::list_groups
+        - {stream_name}::update
 
         Args:
             stream_name: The name of the stream.
@@ -482,9 +482,9 @@ class III:
             result = await stream.update(input_data)
             return result.model_dump() if result else None
 
-        self.register_function(f"{stream_name}.get", get_handler)
-        self.register_function(f"{stream_name}.set", set_handler)
-        self.register_function(f"{stream_name}.delete", delete_handler)
-        self.register_function(f"{stream_name}.list", list_handler)
-        self.register_function(f"{stream_name}.list_groups", list_groups_handler)
-        self.register_function(f"{stream_name}.update", update_handler)
+        self.register_function(f"{stream_name}::get", get_handler)
+        self.register_function(f"{stream_name}::set", set_handler)
+        self.register_function(f"{stream_name}::delete", delete_handler)
+        self.register_function(f"{stream_name}::list", list_handler)
+        self.register_function(f"{stream_name}::list_groups", list_groups_handler)
+        self.register_function(f"{stream_name}::update", update_handler)

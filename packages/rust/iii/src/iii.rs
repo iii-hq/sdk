@@ -255,21 +255,24 @@ impl III {
             iii.run_connection(rx).await;
         });
 
-        // Initialize OpenTelemetry if configured.
+        // Initialize OpenTelemetry with configured or default config.
         // NOTE: This runs after the connection spawn, so the first few function
         // invocations may not carry tracing context. The global tracer returns a
         // no-op until initialization completes, so no panics occur — traces
         // simply won't appear for those early calls.
         #[cfg(feature = "otel")]
         {
-            let config = self.inner.otel_config.lock_or_recover().take();
-            if let Some(mut config) = config {
-                // Default engine_ws_url to the III address if not set
-                if config.engine_ws_url.is_none() {
-                    config.engine_ws_url = Some(self.inner.address.clone());
-                }
-                telemetry::init_otel(config).await;
+            let mut config = self
+                .inner
+                .otel_config
+                .lock_or_recover()
+                .take()
+                .unwrap_or_default();
+            // Default engine_ws_url to the III address if not set
+            if config.engine_ws_url.is_none() {
+                config.engine_ws_url = Some(self.inner.address.clone());
             }
+            telemetry::init_otel(config).await;
         }
 
         Ok(())

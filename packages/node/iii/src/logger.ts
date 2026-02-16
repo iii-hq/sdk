@@ -51,7 +51,13 @@ export class Logger {
     if (this.serviceName) {
       attributes['service.name'] = this.serviceName
     }
-    if (data !== undefined) {
+    if (data instanceof Error) {
+      attributes['exception.type'] = data.name
+      attributes['exception.message'] = data.message
+      if (data.stack) {
+        attributes['exception.stacktrace'] = data.stack
+      }
+    } else if (data !== undefined) {
       attributes['log.data'] = typeof data === 'string' ? data : safeStringify(data)
     }
 

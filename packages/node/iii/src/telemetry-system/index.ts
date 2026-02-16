@@ -20,7 +20,7 @@ import {
   type Tracer,
   type Meter,
 } from '@opentelemetry/api'
-import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics'
 import {
   CompositePropagator,
@@ -29,7 +29,7 @@ import {
 } from '@opentelemetry/core'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
 import { registerInstrumentations } from '@opentelemetry/instrumentation'
-import { LoggerProvider, SimpleLogRecordProcessor } from '@opentelemetry/sdk-logs'
+import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs'
 import { type Logger, SeverityNumber } from '@opentelemetry/api-logs'
 
 import {
@@ -61,13 +61,21 @@ let serviceName: string = 'iii-node-iii'
  * This should be called once at application startup.
  */
 export function initOtel(config: OtelConfig = {}): void {
-  const enabled =
-    config.enabled ?? (process.env.OTEL_ENABLED === 'true' || process.env.OTEL_ENABLED === '1')
-
-  if (!enabled) {
-    console.log('[OTel] OpenTelemetry is disabled')
+  if (tracerProvider) {
+    console.warn('[OTel] Already initialized, skipping')
     return
   }
+
+  const otelFalsyValues = ['false', '0', 'no', 'off', 'disabled']
+  const enabled =
+    config.enabled ?? !otelFalsyValues.includes((process.env.OTEL_ENABLED ?? '').toLowerCase())
+
+  if (!enabled) {
+    console.log('[OTel] OpenTelemetry is explicitly disabled')
+    return
+  }
+
+  console.log('[OTel] Telemetry enabled by default. Set OTEL_ENABLED=false to disable.')
 
   // Register any provided instrumentations
   if (config.instrumentations?.length) {
@@ -100,7 +108,7 @@ export function initOtel(config: OtelConfig = {}): void {
   const spanExporter = new EngineSpanExporter(sharedConnection)
   tracerProvider = new NodeTracerProvider({
     resource,
-    spanProcessors: [new SimpleSpanProcessor(spanExporter)],
+    spanProcessors: [new BatchSpanProcessor(spanExporter, { maxQueueSize: 2048, maxExportBatchSize: 512, scheduledDelayMillis: 5000 })],
   })
 
   // Register W3C Trace Context and Baggage propagators
@@ -118,7 +126,7 @@ export function initOtel(config: OtelConfig = {}): void {
   // Initialize metrics if enabled
   const metricsEnabled =
     config.metricsEnabled ??
-    (process.env.OTEL_METRICS_ENABLED === 'true' || process.env.OTEL_METRICS_ENABLED === '1')
+    !otelFalsyValues.includes((process.env.OTEL_METRICS_ENABLED ?? '').toLowerCase())
 
   if (metricsEnabled) {
     const metricsExporter = new EngineMetricsExporter(sharedConnection)
@@ -143,7 +151,7 @@ export function initOtel(config: OtelConfig = {}): void {
   // Initialize logs (always enabled when OTEL is enabled)
   const logExporter = new EngineLogExporter(sharedConnection)
   loggerProvider = new LoggerProvider({ resource })
-  loggerProvider.addLogRecordProcessor(new SimpleLogRecordProcessor(logExporter))
+  loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(logExporter, { maxQueueSize: 2048, maxExportBatchSize: 512, scheduledDelayMillis: 5000 }))
   logger = loggerProvider.getLogger(serviceName)
 
   console.log('[OTel] Logs initialized')

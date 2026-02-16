@@ -59,8 +59,11 @@ pub async fn init_otel(config: OtelConfig) {
 
     let enabled = config.enabled.unwrap_or_else(|| {
         std::env::var("OTEL_ENABLED")
-            .map(|v| v == "true" || v == "1")
-            .unwrap_or(false)
+            .map(|v| {
+                let lower = v.to_lowercase();
+                !["false", "0", "no", "off", "disabled"].contains(&lower.as_str())
+            })
+            .unwrap_or(true)
     });
 
     if !enabled {
@@ -130,7 +133,16 @@ pub async fn init_otel(config: OtelConfig) {
     opentelemetry::global::set_tracer_provider(tracer_provider.clone());
 
     // Set up metrics if enabled
-    let meter_provider = if config.metrics_enabled.unwrap_or(true) {
+    let metrics_enabled = config.metrics_enabled.unwrap_or_else(|| {
+        std::env::var("OTEL_METRICS_ENABLED")
+            .map(|v| {
+                let lower = v.to_lowercase();
+                !["false", "0", "no", "off", "disabled"].contains(&lower.as_str())
+            })
+            .unwrap_or(true)
+    });
+
+    let meter_provider = if metrics_enabled {
         let metrics_exporter = EngineMetricsExporter::new(connection.clone());
         let interval_ms = config.metrics_export_interval_ms.unwrap_or(60_000);
 

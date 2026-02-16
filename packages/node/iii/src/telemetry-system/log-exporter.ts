@@ -13,6 +13,8 @@ import { PREFIX_LOGS } from './types'
  * Log exporter using the shared WebSocket connection.
  */
 export class EngineLogExporter implements LogRecordExporter {
+  private static readonly MAX_PENDING_EXPORTS = 100
+  private lastDropWarnTime = 0
   private connection: SharedEngineConnection
   private pendingExports: Array<{
     logs: ReadableLogRecord[]
@@ -36,6 +38,15 @@ export class EngineLogExporter implements LogRecordExporter {
     resultCallback: (result: ExportResult) => void,
   ): void {
     if (this.connection.getState() !== 'connected') {
+      if (this.pendingExports.length >= EngineLogExporter.MAX_PENDING_EXPORTS) {
+        const dropped = this.pendingExports.shift()
+        dropped?.callback({ code: ExportResultCode.FAILED, error: new Error('Queue overflow') })
+        const now = Date.now()
+        if (now - this.lastDropWarnTime > 10_000) {
+          console.warn('[OTel] Logs export queue full, dropping oldest entries')
+          this.lastDropWarnTime = now
+        }
+      }
       this.pendingExports.push({ logs, callback: resultCallback })
       return
     }

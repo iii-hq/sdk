@@ -33,8 +33,8 @@ export type TriggerRegistrationResultMessage = {
   id: string
   trigger_type: string
   function_id: string
-  result?: any
-  error?: any
+  result?: unknown
+  error?: unknown
 }
 
 export type RegisterTriggerMessage = {
@@ -51,7 +51,7 @@ export type RegisterTriggerMessage = {
    * Where software, engineering, and code are the service ids
    */
   function_id: string
-  config: any
+  config: unknown
 }
 
 export type RegisterServiceMessage = {
@@ -119,7 +119,7 @@ export type InvokeFunctionMessage = {
   /**
    * The data to pass to the function
    */
-  data: any
+  data: unknown
   /**
    * W3C trace-context traceparent header for distributed tracing
    */
@@ -140,8 +140,8 @@ export type InvocationResultMessage = {
    * The path of the function
    */
   function_id: string
-  result?: any
-  error?: any
+  result?: unknown
+  error?: unknown
   /**
    * W3C trace-context traceparent header for distributed tracing
    */

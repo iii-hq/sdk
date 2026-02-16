@@ -54,7 +54,7 @@ describe.skipIf(skipIfServerUnavailable())('Stream Operations', () => {
         data: initialData,
       })
 
-      const result: StreamSetResult<any> = await iii.call('stream::set', {
+      const result: StreamSetResult<TestData> = await iii.call('stream::set', {
         stream_name: testStreamName,
         group_id: testGroupId,
         item_id: testItemId,

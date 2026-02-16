@@ -8,6 +8,7 @@ import type {
 import type { TriggerHandler } from './triggers'
 import type { IStream } from './stream'
 
+// biome-ignore lint/suspicious/noExplicitAny: generic defaults require any for contravariant compatibility
 export type RemoteFunctionHandler<TInput = any, TOutput = any> = (data: TInput) => Promise<TOutput>
 
 /** OTEL Log Event from the engine */
@@ -49,12 +50,15 @@ export type LogConfig = {
 
 /** Callback type for log events */
 export type LogCallback = (log: OtelLogEvent) => void
+// biome-ignore lint/suspicious/noExplicitAny: generic default requires any for contravariant compatibility
 export type Invocation<TOutput = any> = {
   resolve: (data: TOutput) => void
+  // biome-ignore lint/suspicious/noExplicitAny: error can be any type
   reject: (error: any) => void
 }
 
 /** Internal handler type that includes traceparent and baggage for distributed tracing */
+// biome-ignore lint/suspicious/noExplicitAny: generic defaults require any for contravariant compatibility
 export type InternalFunctionHandler<TInput = any, TOutput = any> = (
   data: TInput,
   traceparent?: string,
@@ -73,6 +77,7 @@ export type RemoteServiceFunctionData = {
 
 export type RemoteTriggerTypeData = {
   message: RegisterTriggerTypeMessage
+  // biome-ignore lint/suspicious/noExplicitAny: handler accepts any trigger config type
   handler: TriggerHandler<any>
 }
 
@@ -160,6 +165,11 @@ export interface ISdk {
    * @returns A function to unregister the callback
    */
   onLog(callback: LogCallback, config?: LogConfig): () => void
+
+  /**
+   * Gracefully shutdown the iii, cleaning up all resources.
+   */
+  shutdown(): Promise<void>
 }
 
 export type Trigger = {

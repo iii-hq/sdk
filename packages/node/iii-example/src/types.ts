@@ -1,7 +1,8 @@
 export type Todo = {
   id: string
-  groupId: string
   description: string
+  groupId: string
+  createdAt: string
   dueDate: string
   completedAt: string | null
 }

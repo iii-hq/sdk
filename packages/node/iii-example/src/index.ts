@@ -1,16 +1,8 @@
-import { useApi, useFunctionsAvailable, useOnLog } from './hooks'
+import { useApi } from './hooks'
 import { state } from './state'
 import { streams } from './stream'
+import type { Todo } from './types'
 
-useFunctionsAvailable(functions => {
-  console.log('--------------------------------')
-  console.log('Functions available:', functions.length)
-  console.log('--------------------------------')
-})
-
-useOnLog(async log => {
-  console.log('[OTEL Log]', log)
-})
 useApi(
   {
     api_path: 'todo',
@@ -28,14 +20,15 @@ useApi(
       return { status_code: 400, body: { error: 'Description is required' } }
     }
 
-    const newTodo = {
+    const newTodo: Todo = {
       id: todoId,
       description,
+      groupId: 'inbox',
       createdAt: new Date().toISOString(),
       dueDate: dueDate,
-      completedAt: undefined,
+      completedAt: null,
     }
-    const todo = await streams.set('todo', 'inbox', todoId, newTodo)
+    const todo = await streams.set<Todo>('todo', 'inbox', todoId, newTodo)
 
     return { status_code: 201, body: todo, headers: { 'Content-Type': 'application/json' } }
   },
@@ -79,7 +72,7 @@ useApi(
   },
   async (req, ctx) => {
     const todoId = req.path_params.id
-    const existingTodo = todoId ? await streams.get('todo', 'inbox', todoId) : undefined
+    const existingTodo = todoId ? await streams.get<Todo | null>('todo', 'inbox', todoId) : null
 
     ctx.logger.info('Updating todo', { body: req.body, todoId })
 
@@ -88,7 +81,7 @@ useApi(
       return { status_code: 404, body: { error: 'Todo not found' } }
     }
 
-    const todo = await streams.set('todo', 'inbox', todoId, { ...existingTodo, ...req.body })
+    const todo = await streams.set<Todo>('todo', 'inbox', todoId, { ...existingTodo, ...req.body })
 
     ctx.logger.info('Todo updated successfully', { todoId })
 
@@ -108,14 +101,15 @@ useApi(
       return { status_code: 400, body: { error: 'Description is required' } }
     }
 
-    const newTodo = {
+    const newTodo: Todo = {
       id: todoId,
       description,
+      groupId: 'inbox',
       createdAt: new Date().toISOString(),
       dueDate: dueDate,
-      completedAt: undefined,
+      completedAt: null,
     }
-    const todo = await state.set({ scope: 'todo', key: todoId, data: newTodo })
+    const todo = await state.set<Todo>({ scope: 'todo', key: todoId, data: newTodo })
 
     return { status_code: 201, body: todo, headers: { 'Content-Type': 'application/json' } }
   },
@@ -127,7 +121,7 @@ useApi(
     ctx.logger.info('Getting todo', { ...req.path_params })
 
     const todoId = req.path_params.id
-    const todo = await state.get({ scope: 'todo', key: todoId })
+    const todo = await state.get<Todo | null>({ scope: 'todo', key: todoId })
 
     return { status_code: 200, body: todo, headers: { 'Content-Type': 'application/json' } }
   },

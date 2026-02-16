@@ -47,7 +47,7 @@ async def main():
     await iii.connect()
 
     iii.register_trigger(
-        trigger_type="http",
+        type="http",
         function_id="api.post.todo",
         config={
             "api_path": "/todo",

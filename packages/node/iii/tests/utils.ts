@@ -1,8 +1,8 @@
 // import { iii } from 'iii-sdk'
 import { init, Logger } from '../src/index'
 
-const ENGINE_WS_URL = process.env.III_BRIDGE_URL ?? 'ws://localhost:49134'
-const ENGINE_HTTP_URL = process.env.III_HTTP_URL ?? 'http://localhost:3111'
+const ENGINE_WS_URL = process.env.III_BRIDGE_URL ?? 'ws://localhost:49199'
+const ENGINE_HTTP_URL = process.env.III_HTTP_URL ?? 'http://localhost:3199'
 const RETRY_LIMIT = 100
 const DELAY_MS = 100
 
@@ -28,27 +28,6 @@ export const iii = init(engineWsUrl, {
 
 // Standalone logger for test utilities — no trace context needed
 export const logger = new Logger()
-
-export async function checkServerAvailability(): Promise<boolean> {
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 2000)
-
-    try {
-      const response = await fetch(ENGINE_HTTP_URL, {
-        method: 'GET',
-        signal: controller.signal,
-      })
-      clearTimeout(timeoutId)
-      return response.status < 500
-    } catch {
-      clearTimeout(timeoutId)
-      return false
-    }
-  } catch {
-    return false
-  }
-}
 
 export async function httpRequest(
   method: string,

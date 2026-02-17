@@ -107,9 +107,15 @@ export interface ISdk {
    * Invokes a function.
    * @param function_id - The path to the function
    * @param data - The data to pass to the function
+   * @param timeoutMs - Optional timeout in milliseconds
    * @returns The result of the function
    */
-  call<TInput, TOutput>(function_id: string, data: TInput): Promise<TOutput>
+  call<TInput, TOutput>(function_id: string, data: TInput, timeoutMs?: number): Promise<TOutput>
+
+  /**
+   * Lists all registered functions.
+   */
+  listFunctions(): Promise<FunctionInfo[]>
 
   /**
    * Invokes a function asynchronously.

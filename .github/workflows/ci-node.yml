@@ -60,3 +60,35 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Start III Engine
+        run: |
+          docker run -d --name iii-engine --network=host \
+            -v "${{ github.workspace }}/packages/node/iii/tests/fixtures/config-test.yaml":/app/config.yaml:ro \
+            -e RUST_LOG=info \
+            iiidev/iii:build-amd64
+
+      - name: Wait for III Engine
+        run: |
+          echo "Waiting for III Engine on port 49199..."
+          for i in $(seq 1 30); do
+            if nc -z localhost 49199 2>/dev/null; then
+              echo "III Engine is ready!"
+              exit 0
+            fi
+            echo "  attempt $i/30..."
+            sleep 2
+          done
+          echo "Engine did not become ready. Logs:"
+          docker logs iii-engine
+          exit 1
+
+      - name: Run tests
+        env:
+          III_BRIDGE_URL: ws://localhost:49199
+          III_HTTP_URL: http://localhost:3199
+        run: pnpm --filter iii-sdk test
+
+      - name: Stop III Engine
+        if: always()
+        run: docker rm -f iii-engine || true

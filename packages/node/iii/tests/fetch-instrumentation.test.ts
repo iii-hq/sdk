@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest'
-import { SpanStatusCode } from '@opentelemetry/api'
+import { type Tracer, SpanStatusCode } from '@opentelemetry/api'
+import type { Instrumentation } from '@opentelemetry/instrumentation'
 
 // Mock WebSocket to prevent real connections
 vi.mock('ws', () => {
@@ -68,11 +69,7 @@ vi.mock('../src/telemetry-system/connection', () => ({
   })),
 }))
 
-import {
-  initOtel,
-  shutdownOtel,
-  getTracer,
-} from '../src/telemetry-system/index'
+import { initOtel, shutdownOtel, getTracer } from '../src/telemetry-system/index'
 
 describe('Fetch instrumentation', () => {
   const originalEnv = process.env
@@ -140,7 +137,9 @@ describe('Fetch instrumentation', () => {
       enable: vi.fn(),
       disable: vi.fn(),
     }
-    expect(() => initOtel({ instrumentations: [userInstrumentation as any] })).not.toThrow()
+    expect(() =>
+      initOtel({ instrumentations: [userInstrumentation as Instrumentation] }),
+    ).not.toThrow()
     expect(getTracer()).not.toBeNull()
     // Both fetch patch and user instrumentations should work
     expect(globalThis.fetch).not.toBe(nativeFetch)
@@ -158,7 +157,10 @@ describe('Fetch instrumentation', () => {
       disable: vi.fn(),
     }
     expect(() =>
-      initOtel({ fetchInstrumentationEnabled: false, instrumentations: [userInstrumentation as any] }),
+      initOtel({
+        fetchInstrumentationEnabled: false,
+        instrumentations: [userInstrumentation as Instrumentation],
+      }),
     ).not.toThrow()
     expect(getTracer()).not.toBeNull()
     // Fetch should NOT be patched
@@ -184,10 +186,12 @@ describe('Fetch span attributes', () => {
       end: vi.fn(),
     }
     const tracerMock = {
-      startActiveSpan: vi.fn().mockImplementation(
-        (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
-          fn(spanMock),
-      ),
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
     }
 
     const { patchGlobalFetch, unpatchGlobalFetch } = await import(
@@ -199,7 +203,7 @@ describe('Fetch span attributes', () => {
     const fakeFetch = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
     globalThis.fetch = fakeFetch
 
-    patchGlobalFetch(tracerMock as any)
+    patchGlobalFetch(tracerMock as unknown as Tracer)
 
     await globalThis.fetch('https://example.com/api/items?q=1')
 
@@ -220,7 +224,7 @@ describe('Fetch span attributes', () => {
     )
 
     expect(spanMock.setAttribute).toHaveBeenCalledWith('http.response.status_code', 200)
-    expect(spanMock.setStatus).toHaveBeenCalledWith({ code: SpanStatusCode.UNSET })
+    expect(spanMock.setStatus).toHaveBeenCalledWith({ code: SpanStatusCode.OK })
   })
 
   it('sets error.type and ERROR status on 4xx response', async () => {
@@ -231,10 +235,12 @@ describe('Fetch span attributes', () => {
       end: vi.fn(),
     }
     const tracerMock = {
-      startActiveSpan: vi.fn().mockImplementation(
-        (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
-          fn(spanMock),
-      ),
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
     }
 
     const { patchGlobalFetch, unpatchGlobalFetch } = await import(
@@ -245,7 +251,7 @@ describe('Fetch span attributes', () => {
     const fakeFetch = vi.fn().mockResolvedValue(new Response('not found', { status: 404 }))
     globalThis.fetch = fakeFetch
 
-    patchGlobalFetch(tracerMock as any)
+    patchGlobalFetch(tracerMock as unknown as Tracer)
 
     await globalThis.fetch('https://example.com/missing')
 

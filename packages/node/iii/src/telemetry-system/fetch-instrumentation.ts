@@ -6,13 +6,7 @@
  * which only works when fetch is backed by Node.js's undici.
  */
 
-import {
-  type Tracer,
-  SpanKind,
-  SpanStatusCode,
-  context,
-  propagation,
-} from '@opentelemetry/api'
+import { type Tracer, SpanKind, SpanStatusCode, context, propagation } from '@opentelemetry/api'
 
 let originalFetch: typeof globalThis.fetch | null = null
 
@@ -63,7 +57,7 @@ export function patchGlobalFetch(tracer: Tracer): void {
       spanName,
       { kind: SpanKind.CLIENT, attributes: spanAttributes },
       context.active(),
-      async (span) => {
+      async span => {
         try {
           const carrier: Record<string, string> = {}
           propagation.inject(context.active(), carrier)
@@ -75,7 +69,7 @@ export function patchGlobalFetch(tracer: Tracer): void {
             headers.set(key, value)
           }
 
-          const response = await originalFetch!(input, { ...init, headers })
+          const response = await originalFetch?.(input, { ...init, headers })
 
           span.setAttribute('http.response.status_code', response.status)
 

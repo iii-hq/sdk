@@ -5,7 +5,7 @@ import type { Todo } from './types'
 
 useApi(
   {
-    api_path: 'todo',
+    api_path: '/todo',
     http_method: 'POST',
     description: 'Create a new todo',
     metadata: { tags: ['todo'] },

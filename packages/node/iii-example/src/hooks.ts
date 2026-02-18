@@ -11,7 +11,7 @@ export const useApi = <TBody = any>(
   },
   handler: (req: ApiRequest<TBody>, context: Context) => Promise<ApiResponse>,
 ) => {
-  const function_id = `api.${config.http_method.toLowerCase()}.${config.api_path}`
+  const function_id = `api::${config.http_method.toLowerCase()}::${config.api_path}`
 
   iii.registerFunction({ id: function_id, metadata: config.metadata }, req =>
     handler(req, getContext()),

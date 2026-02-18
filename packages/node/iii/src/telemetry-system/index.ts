@@ -43,6 +43,7 @@ import {
 import { SharedEngineConnection } from './connection'
 import { EngineSpanExporter, EngineMetricsExporter, EngineLogExporter } from './exporters'
 import { extractTraceparent } from './context'
+import { patchGlobalFetch, unpatchGlobalFetch } from './fetch-instrumentation'
 
 // Re-export everything from submodules
 export * from './types'
@@ -71,11 +72,6 @@ export function initOtel(config: OtelConfig = {}): void {
       '[OTel] OpenTelemetry is disabled. To enable, remove OTEL_ENABLED=false or set enabled: true in config.',
     )
     return
-  }
-
-  // Register any provided instrumentations
-  if (config.instrumentations?.length) {
-    registerInstrumentations({ instrumentations: config.instrumentations })
   }
 
   // Configure service identity
@@ -148,6 +144,26 @@ export function initOtel(config: OtelConfig = {}): void {
     console.debug(`[OTel] Metrics initialized: interval=${exportIntervalMs}ms`)
   }
 
+  // Register user-provided instrumentations AFTER providers are set up
+  const instrumentations = [...(config.instrumentations ?? [])]
+  if (instrumentations.length > 0) {
+    registerInstrumentations({
+      instrumentations,
+      tracerProvider,
+      meterProvider: meterProvider ?? undefined,
+    })
+    console.debug(`[OTel] Instrumentations registered: ${instrumentations.length} total`)
+  }
+
+  // Patch global fetch for runtime-agnostic HTTP client tracing (works on Bun, Node.js, Deno)
+  const fetchEnabled =
+    config.fetchInstrumentationEnabled ?? DEFAULT_OTEL_CONFIG.fetchInstrumentationEnabled
+
+  if (fetchEnabled) {
+    patchGlobalFetch(tracer)
+    console.debug('[OTel] Global fetch instrumentation enabled')
+  }
+
   // Initialize logs (always enabled when OTEL is enabled)
   const logExporter = new EngineLogExporter(sharedConnection)
   loggerProvider = new LoggerProvider({ resource })
@@ -180,6 +196,8 @@ export async function shutdownOtel(): Promise<void> {
     await sharedConnection.shutdown()
     sharedConnection = null
   }
+
+  unpatchGlobalFetch()
 
   tracer = null
   meter = null

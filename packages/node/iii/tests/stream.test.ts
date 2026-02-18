@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { iii, sleep } from './utils'
 import type { StreamSetInput, StreamSetResult } from '../src/stream'
+import { iii, sleep } from './utils'
 
 type TestData = {
   name?: string

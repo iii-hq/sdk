@@ -116,3 +116,28 @@ export interface IStream<TData> {
   listGroups(input: StreamListGroupsInput): Promise<string[]>
   update(input: StreamUpdateInput): Promise<StreamUpdateResult<TData> | null>
 }
+
+export type EventData<TEventData = unknown> = {
+  type: string
+  data: TEventData
+}
+
+export type StreamCreate<TStreamData = unknown> = { type: 'create'; data: TStreamData }
+export type StreamUpdate<TStreamData = unknown> = { type: 'update'; data: TStreamData }
+export type StreamDelete<TStreamData = unknown> = { type: 'delete'; data: TStreamData }
+export type StreamEvent<TEventData = unknown> = { type: 'event'; data: EventData<TEventData> }
+
+export type StreamMessage<TStreamData = unknown> =
+  | StreamCreate<TStreamData>
+  | StreamUpdate<TStreamData>
+  | StreamDelete<TStreamData>
+  | StreamEvent
+
+export type StreamWrapperMessage<TStreamData = unknown> = {
+  type: 'stream'
+  timestamp: number
+  streamName: string
+  groupId: string
+  id?: string
+  event: StreamMessage<TStreamData>
+}

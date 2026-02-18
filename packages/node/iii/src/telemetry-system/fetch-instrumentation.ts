@@ -17,6 +17,7 @@ export function patchGlobalFetch(tracer: Tracer): void {
   if (originalFetch) return
 
   originalFetch = globalThis.fetch
+  const capturedFetch = originalFetch
 
   globalThis.fetch = async (
     input: string | URL | Request,
@@ -69,7 +70,7 @@ export function patchGlobalFetch(tracer: Tracer): void {
             headers.set(key, value)
           }
 
-          const response = await originalFetch?.(input, { ...init, headers })
+          const response = await capturedFetch(input, { ...init, headers })
 
           span.setAttribute('http.response.status_code', response.status)
 

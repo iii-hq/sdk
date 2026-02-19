@@ -45,7 +45,8 @@ def init_otel(
     enabled = cfg.enabled
     if enabled is None:
         env = os.environ.get("OTEL_ENABLED", "").lower()
-        enabled = env in ("true", "1", "yes", "on")
+        # Enabled by default; set OTEL_ENABLED=false/0/no/off to disable
+        enabled = env not in ("false", "0", "no", "off")
 
     if not enabled:
         return
@@ -54,7 +55,7 @@ def init_otel(
         from opentelemetry import trace
         from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
         from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     except ImportError as exc:
         raise ImportError(
             "opentelemetry-api and opentelemetry-sdk are required. "
@@ -99,7 +100,7 @@ def init_otel(
 
     span_exporter = EngineSpanExporter(_connection)
     provider = TracerProvider(resource=resource)
-    provider.add_span_processor(BatchSpanProcessor(span_exporter))
+    provider.add_span_processor(SimpleSpanProcessor(span_exporter))
     trace.set_tracer_provider(provider)
     _tracer = trace.get_tracer("iii-python-sdk")
 
@@ -120,7 +121,7 @@ def _configure_log_provider(resource: Any, connection: Any) -> None:
     try:
         from opentelemetry import _logs
         from opentelemetry.sdk._logs import LoggerProvider as SdkLoggerProvider
-        from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+        from opentelemetry.sdk._logs.export import SimpleLogRecordProcessor
         from .telemetry_exporters import EngineLogExporter
     except ImportError:
         logging.getLogger("iii.telemetry").warning(
@@ -130,7 +131,7 @@ def _configure_log_provider(resource: Any, connection: Any) -> None:
 
     log_exporter = EngineLogExporter(connection)
     log_provider = SdkLoggerProvider(resource=resource)
-    log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+    log_provider.add_log_record_processor(SimpleLogRecordProcessor(log_exporter))
     _logs.set_logger_provider(log_provider)
     _log_provider = log_provider
 

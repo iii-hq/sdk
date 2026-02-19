@@ -9,9 +9,21 @@ from iii.telemetry_types import OtelConfig
 
 @pytest.fixture(autouse=True)
 def otel_setup():
-    init_otel(OtelConfig(enabled=True, otlp_endpoint="http://localhost:4318"))
+    init_otel(OtelConfig(enabled=True))
     yield
     shutdown_otel()
+    try:
+        import opentelemetry._logs._internal as _li
+        _li._LOGGER_PROVIDER = None
+        _li._LOGGER_PROVIDER_SET_ONCE._done = False
+    except Exception:
+        pass
+    try:
+        import opentelemetry.trace._internal as _ti
+        _ti._TRACER_PROVIDER = None
+        _ti._TRACER_PROVIDER_SET_ONCE._done = False
+    except Exception:
+        pass
 
 
 @pytest.mark.asyncio

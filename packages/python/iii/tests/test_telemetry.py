@@ -85,19 +85,19 @@ def test_telemetry_apis_exported_from_package():
 
 
 def test_init_configures_engine_span_exporter():
-    """init_otel wires a BatchSpanProcessor(EngineSpanExporter) on the TracerProvider."""
+    """init_otel wires a SimpleSpanProcessor(EngineSpanExporter) on the TracerProvider."""
     from opentelemetry import trace
     from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from iii.telemetry_exporters import EngineSpanExporter
 
     init_otel(OtelConfig(enabled=True))
     provider = trace.get_tracer_provider()
     assert isinstance(provider, TracerProvider)
     processors = provider._active_span_processor._span_processors
-    bsp = next((p for p in processors if isinstance(p, BatchSpanProcessor)), None)
-    assert bsp is not None
-    assert isinstance(bsp.span_exporter, EngineSpanExporter)
+    ssp = next((p for p in processors if isinstance(p, SimpleSpanProcessor)), None)
+    assert ssp is not None
+    assert isinstance(ssp.span_exporter, EngineSpanExporter)
 
 
 def test_init_configures_log_provider():

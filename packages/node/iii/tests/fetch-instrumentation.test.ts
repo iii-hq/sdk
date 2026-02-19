@@ -299,6 +299,107 @@ describe('Fetch span attributes', () => {
     expect(callArgs.attributes['url.query']).toBeUndefined()
   })
 
+  it('sets http.request.body.size for string body', async () => {
+    const spanMock = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      recordException: vi.fn(),
+      end: vi.fn(),
+    }
+    const tracerMock = {
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
+    }
+
+    const { patchGlobalFetch, unpatchGlobalFetch } = await import(
+      '../src/telemetry-system/fetch-instrumentation'
+    )
+    unpatch = unpatchGlobalFetch
+
+    const fakeFetch = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    globalThis.fetch = fakeFetch
+
+    patchGlobalFetch(tracerMock as unknown as Tracer)
+
+    await globalThis.fetch('https://example.com/api', {
+      method: 'POST',
+      body: 'hello',
+    })
+
+    // 'hello' is 5 bytes in UTF-8
+    expect(spanMock.setAttribute).toHaveBeenCalledWith('http.request.body.size', 5)
+  })
+
+  it('sets http.request.body.size for Uint8Array body', async () => {
+    const spanMock = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      recordException: vi.fn(),
+      end: vi.fn(),
+    }
+    const tracerMock = {
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
+    }
+
+    const { patchGlobalFetch, unpatchGlobalFetch } = await import(
+      '../src/telemetry-system/fetch-instrumentation'
+    )
+    unpatch = unpatchGlobalFetch
+
+    const fakeFetch = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    globalThis.fetch = fakeFetch
+
+    patchGlobalFetch(tracerMock as unknown as Tracer)
+
+    await globalThis.fetch('https://example.com/api', {
+      method: 'POST',
+      body: new Uint8Array([1, 2, 3, 4]),
+    })
+
+    expect(spanMock.setAttribute).toHaveBeenCalledWith('http.request.body.size', 4)
+  })
+
+  it('does not set http.request.body.size when body is absent', async () => {
+    const spanMock = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      recordException: vi.fn(),
+      end: vi.fn(),
+    }
+    const tracerMock = {
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
+    }
+
+    const { patchGlobalFetch, unpatchGlobalFetch } = await import(
+      '../src/telemetry-system/fetch-instrumentation'
+    )
+    unpatch = unpatchGlobalFetch
+
+    const fakeFetch = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    globalThis.fetch = fakeFetch
+
+    patchGlobalFetch(tracerMock as unknown as Tracer)
+
+    await globalThis.fetch('https://example.com/api')
+
+    const calls = spanMock.setAttribute.mock.calls.map(c => c[0])
+    expect(calls).not.toContain('http.request.body.size')
+  })
+
   it('sets error.type and ERROR status on 4xx response', async () => {
     const spanMock = {
       setAttribute: vi.fn(),

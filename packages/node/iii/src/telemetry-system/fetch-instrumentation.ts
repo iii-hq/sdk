@@ -8,6 +8,16 @@
 
 import { type Tracer, SpanKind, SpanStatusCode, context, propagation } from '@opentelemetry/api'
 
+function getBodyByteSize(body: unknown): number | undefined {
+  if (body == null) return undefined
+  if (typeof body === 'string') return new TextEncoder().encode(body).byteLength
+  if (body instanceof ArrayBuffer) return body.byteLength
+  if (ArrayBuffer.isView(body)) return body.byteLength
+  if (body instanceof Blob) return body.size
+  if (body instanceof URLSearchParams) return new TextEncoder().encode(body.toString()).byteLength
+  return undefined
+}
+
 let originalFetch: typeof globalThis.fetch | null = null
 
 /**
@@ -71,6 +81,12 @@ export function patchGlobalFetch(tracer: Tracer): void {
           )
           for (const [key, value] of Object.entries(carrier)) {
             headers.set(key, value)
+          }
+
+          const requestBody = init?.body ?? (input instanceof Request ? input.body : undefined)
+          const requestBodySize = getBodyByteSize(requestBody)
+          if (requestBodySize !== undefined) {
+            span.setAttribute('http.request.body.size', requestBodySize)
           }
 
           const response = await capturedFetch(input, { ...init, headers })

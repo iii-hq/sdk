@@ -70,8 +70,13 @@ class III:
         """Connect to the WebSocket server."""
         self._running = True
         try:
-            from .telemetry import attach_event_loop
-            attach_event_loop(asyncio.get_running_loop())
+            from .telemetry import init_otel, attach_event_loop
+            loop = asyncio.get_running_loop()
+            # Auto-initialize OTel using env vars (OTEL_ENABLED etc.) if not already done.
+            # If the caller already called init_otel() this is a no-op.
+            init_otel(loop=loop)
+            # Wire the loop if init_otel() was called earlier without one.
+            attach_event_loop(loop)
         except ImportError:
             pass
         await self._do_connect()

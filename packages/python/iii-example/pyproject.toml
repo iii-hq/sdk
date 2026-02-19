@@ -12,8 +12,6 @@ dependencies = [
     "iii-sdk",
     "opentelemetry-api",
     "opentelemetry-sdk",
-    "opentelemetry-instrumentation-urllib",
-    "opentelemetry-exporter-otlp-proto-http",
 ]
 
 [tool.uv.sources]

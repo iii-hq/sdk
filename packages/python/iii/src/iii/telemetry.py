@@ -2,7 +2,7 @@
 
 Provides init_otel() / shutdown_otel() which set up distributed tracing
 (via EngineSpanExporter), log export (via EngineLogExporter), and
-auto-instrument urllib via URLLibInstrumentor.
+auto-instrument urllib with rich HTTP attributes matching the Node.js SDK.
 """
 from __future__ import annotations
 
@@ -136,19 +136,114 @@ def _configure_log_provider(resource: Any, connection: Any) -> None:
     _log_provider = log_provider
 
 
+_original_opener_open: Any = None
+
+
 def _enable_fetch_instrumentation() -> None:
-    """Activate URLLibInstrumentor to auto-patch urllib.request.urlopen."""
-    global _fetch_patched
+    """Patch urllib.request.OpenerDirector.open to create OTel CLIENT spans.
+
+    Custom instrumentation matching the Node.js SDK's patchGlobalFetch —
+    uses new OTel semantic conventions and adds rich attributes (server.address,
+    url.scheme, url.path, http.response.status_code, etc.).
+    """
+    global _fetch_patched, _original_opener_open
+
     try:
-        from opentelemetry.instrumentation.urllib import URLLibInstrumentor
-        URLLibInstrumentor().instrument()
-        _fetch_patched = True
+        from opentelemetry import context as otel_ctx
+        from opentelemetry.propagate import inject as otel_inject
+        from opentelemetry.trace import SpanKind, StatusCode
     except ImportError:
         logging.getLogger("iii.telemetry").warning(
-            "opentelemetry-instrumentation-urllib not installed; "
-            "urllib auto-instrumentation skipped. "
-            "Install with: pip install 'iii-sdk[otel]'"
+            "opentelemetry-api not installed; urllib auto-instrumentation skipped."
         )
+        return
+
+    import socket
+    import urllib.request
+    from urllib.parse import urlparse
+
+    _original_opener_open = urllib.request.OpenerDirector.open
+    original = _original_opener_open
+
+    def _patched_open(self: Any, fullurl: Any, data: Any = None, timeout: Any = socket._GLOBAL_DEFAULT_TIMEOUT) -> Any:
+        tracer = get_tracer()
+        if tracer is None:
+            return original(self, fullurl, data, timeout)
+
+        # Parse URL and method
+        if isinstance(fullurl, str):
+            url = fullurl
+            method = "POST" if data is not None else "GET"
+        else:
+            url = fullurl.full_url
+            method = fullurl.get_method()
+
+        attrs: dict[str, Any] = {"http.request.method": method, "url.full": url}
+
+        try:
+            parsed = urlparse(url)
+            if parsed.hostname:
+                attrs["server.address"] = parsed.hostname
+            if parsed.scheme:
+                attrs["url.scheme"] = parsed.scheme
+                attrs["network.protocol.name"] = "http"
+            if parsed.path:
+                attrs["url.path"] = parsed.path
+            if parsed.port:
+                attrs["server.port"] = parsed.port
+            if parsed.query:
+                attrs["url.query"] = parsed.query
+        except Exception:
+            pass
+
+        if data is not None and isinstance(data, (bytes, bytearray)):
+            attrs["http.request.body.size"] = len(data)
+        if not isinstance(fullurl, str) and fullurl.has_header("Content-type"):
+            attrs["http.request.header.content-type"] = fullurl.get_header("Content-type")
+
+        span_name = f"{method} {attrs.get('url.path', '')}" if "url.path" in attrs else method
+
+        with tracer.start_as_current_span(span_name, kind=SpanKind.CLIENT, attributes=attrs) as span:
+            # Convert string URL to Request so we can inject trace context headers
+            if isinstance(fullurl, str):
+                fullurl = urllib.request.Request(fullurl, data)
+                data = None
+
+            carrier: dict[str, str] = {}
+            otel_inject(carrier, context=otel_ctx.get_current())
+            for key, value in carrier.items():
+                fullurl.add_unredirected_header(key, value)
+
+            try:
+                response = original(self, fullurl, data, timeout)
+
+                span.set_attribute("http.response.status_code", response.status)
+
+                cl = response.headers.get("content-length")
+                if cl:
+                    try:
+                        span.set_attribute("http.response.body.size", int(cl))
+                    except ValueError:
+                        pass
+                ct = response.headers.get("content-type")
+                if ct:
+                    span.set_attribute("http.response.header.content-type", ct)
+
+                if response.status >= 400:
+                    span.set_attribute("error.type", str(response.status))
+                    span.set_status(StatusCode.ERROR)
+                else:
+                    span.set_status(StatusCode.OK)
+
+                return response
+            except Exception as exc:
+                span.set_attribute("error.type", type(exc).__name__)
+                span.set_status(StatusCode.ERROR, str(exc))
+                span.record_exception(exc)
+                raise
+
+    urllib.request.OpenerDirector.open = _patched_open
+    _fetch_patched = True
 
 
 def shutdown_otel() -> None:
@@ -169,8 +264,9 @@ def _reset_state() -> None:
 
     if _fetch_patched:
         try:
-            from opentelemetry.instrumentation.urllib import URLLibInstrumentor
-            URLLibInstrumentor().uninstrument()
+            import urllib.request
+            if _original_opener_open is not None:
+                urllib.request.OpenerDirector.open = _original_opener_open
         except Exception:
             pass
         _fetch_patched = False

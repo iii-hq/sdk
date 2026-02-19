@@ -88,24 +88,20 @@ class SharedEngineConnection:
 
 
 def _serialize_spans(spans: Sequence) -> bytes:
-    """Serialize ReadableSpans to OTLP JSON bytes.
-
-    Uses OTLPSpanExporter._translate_data (a @staticmethod in >=1.25) which
-    returns an ExportTraceServiceRequest protobuf, then MessageToJson.
-    """
-    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    """Serialize ReadableSpans to OTLP JSON bytes."""
+    from opentelemetry.exporter.otlp.proto.common._internal.trace_encoder import encode_spans
     from google.protobuf.json_format import MessageToJson
 
-    proto = OTLPSpanExporter._translate_data(spans)
+    proto = encode_spans(spans)  # type: ignore[arg-type]
     return MessageToJson(proto).encode()
 
 
 def _serialize_logs(batch: Sequence) -> bytes:
-    """Serialize LogData/LogRecord objects to OTLP JSON bytes."""
-    from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+    """Serialize ReadableLogRecord objects to OTLP JSON bytes."""
+    from opentelemetry.exporter.otlp.proto.common._internal._log_encoder import encode_logs
     from google.protobuf.json_format import MessageToJson
 
-    proto = OTLPLogExporter._translate_data(batch)
+    proto = encode_logs(batch)  # type: ignore[arg-type]
     return MessageToJson(proto).encode()
 
 
@@ -140,7 +136,7 @@ class EngineLogExporter:
         self._connection = connection
 
     def export(self, batch: Sequence) -> "LogExportResult":
-        from opentelemetry.sdk.logs.export import LogExportResult
+        from opentelemetry.sdk._logs.export import LogExportResult
 
         try:
             json_bytes = _serialize_logs(batch)

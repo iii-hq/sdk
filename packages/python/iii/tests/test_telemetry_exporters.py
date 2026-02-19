@@ -44,9 +44,32 @@ def test_engine_span_exporter_sends_otlp_prefix():
     assert len(conn._sent) == 1
     prefix, payload = conn._sent[0]
     assert prefix == b"OTLP"
-    # payload must be valid JSON
+    # payload must be valid JSON with camelCase keys
     parsed = json.loads(payload.decode())
-    assert "resourceSpans" in parsed or "resource_spans" in parsed
+    assert "resourceSpans" in parsed
+
+
+def test_engine_span_exporter_sends_hex_trace_id():
+    """Exported span JSON must use lowercase hex trace_id/span_id, not base64."""
+    conn = _make_mock_connection()
+    exporter = EngineSpanExporter(conn)
+    span = _make_readable_span()
+
+    exporter.export([span])
+
+    _, payload = conn._sent[0]
+    parsed = json.loads(payload.decode())
+    exported_span = parsed["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+
+    expected_trace_id = format(span.context.trace_id, "032x")
+    expected_span_id = format(span.context.span_id, "016x")
+
+    assert exported_span["traceId"] == expected_trace_id, (
+        f"Expected hex trace_id {expected_trace_id!r}, got {exported_span['traceId']!r}"
+    )
+    assert exported_span["spanId"] == expected_span_id, (
+        f"Expected hex span_id {expected_span_id!r}, got {exported_span['spanId']!r}"
+    )
 
 
 def test_engine_span_exporter_returns_failure_on_error():

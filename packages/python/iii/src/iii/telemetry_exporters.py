@@ -87,22 +87,164 @@ class SharedEngineConnection:
                 pass
 
 
-def _serialize_spans(spans: Sequence) -> bytes:
-    """Serialize ReadableSpans to OTLP JSON bytes."""
-    from opentelemetry.exporter.otlp.proto.common._internal.trace_encoder import encode_spans
-    from google.protobuf.json_format import MessageToJson
+def _attr_value(value: Any) -> "dict[str, Any]":
+    """Convert a Python value to an OTLP JSON attribute value dict."""
+    if isinstance(value, bool):
+        return {"boolValue": value}
+    if isinstance(value, int):
+        return {"intValue": str(value)}
+    if isinstance(value, float):
+        return {"doubleValue": value}
+    if isinstance(value, bytes):
+        return {"bytesValue": value.hex()}
+    if isinstance(value, str):
+        return {"stringValue": value}
+    if isinstance(value, (list, tuple)):
+        return {"arrayValue": {"values": [_attr_value(v) for v in value]}}
+    return {"stringValue": str(value)}
 
-    proto = encode_spans(spans)  # type: ignore[arg-type]
-    return MessageToJson(proto).encode()
+
+def _attrs_to_otlp(attrs: Any) -> "list[dict[str, Any]]":
+    """Convert an OTel attributes mapping to an OTLP JSON attribute list."""
+    if not attrs:
+        return []
+    return [{"key": k, "value": _attr_value(v)} for k, v in attrs.items()]
+
+
+def _serialize_spans(spans: Sequence) -> bytes:
+    """Serialize ReadableSpans to OTLP JSON with lowercase-hex trace/span IDs.
+
+    Matches the format produced by the Node.js JsonTraceSerializer.serializeRequest().
+    The III Engine stores IDs as lowercase hex (matching Rust's Display impl), so
+    we must NOT use protobuf MessageToJson which base64-encodes bytes fields.
+    """
+    import json
+    from collections import defaultdict
+
+    resource_map: "dict[int, Any]" = {}
+    scope_map: "dict[int, dict[tuple, list]]" = defaultdict(lambda: defaultdict(list))
+
+    for span in spans:
+        r_id = id(span.resource)
+        if r_id not in resource_map:
+            resource_map[r_id] = span.resource
+        scope = span.instrumentation_scope
+        scope_key = (scope.name or "", scope.version or "")
+        scope_map[r_id][scope_key].append(span)
+
+    resource_spans = []
+    for r_id, resource in resource_map.items():
+        scope_spans = []
+        for (scope_name, scope_version), span_list in scope_map[r_id].items():
+            spans_json = []
+            for span in span_list:
+                span_json: "dict[str, Any]" = {
+                    "traceId": format(span.context.trace_id, "032x"),
+                    "spanId": format(span.context.span_id, "016x"),
+                    "name": span.name,
+                    "kind": span.kind.value,
+                    "startTimeUnixNano": str(span.start_time or 0),
+                    "endTimeUnixNano": str(span.end_time or 0),
+                    "attributes": _attrs_to_otlp(span.attributes),
+                    "events": [
+                        {
+                            "name": e.name,
+                            "timeUnixNano": str(e.timestamp),
+                            "attributes": _attrs_to_otlp(e.attributes),
+                        }
+                        for e in span.events
+                    ],
+                    "links": [
+                        {
+                            "traceId": format(lnk.context.trace_id, "032x"),
+                            "spanId": format(lnk.context.span_id, "016x"),
+                            "attributes": _attrs_to_otlp(lnk.attributes),
+                        }
+                        for lnk in span.links
+                    ],
+                    "status": {
+                        "code": span.status.status_code.value,
+                        "message": span.status.description or "",
+                    },
+                }
+                if span.parent is not None:
+                    span_json["parentSpanId"] = format(span.parent.span_id, "016x")
+                spans_json.append(span_json)
+
+            scope_spans.append({
+                "scope": {"name": scope_name, "version": scope_version},
+                "spans": spans_json,
+            })
+
+        resource_spans.append({
+            "resource": {"attributes": _attrs_to_otlp(resource.attributes)},
+            "scopeSpans": scope_spans,
+        })
+
+    return json.dumps({"resourceSpans": resource_spans}).encode()
 
 
 def _serialize_logs(batch: Sequence) -> bytes:
-    """Serialize ReadableLogRecord objects to OTLP JSON bytes."""
-    from opentelemetry.exporter.otlp.proto.common._internal._log_encoder import encode_logs
-    from google.protobuf.json_format import MessageToJson
+    """Serialize log records to OTLP JSON with lowercase-hex trace/span IDs.
 
-    proto = encode_logs(batch)  # type: ignore[arg-type]
-    return MessageToJson(proto).encode()
+    Matches the format produced by the Node.js JsonLogsSerializer.serializeRequest().
+    """
+    import json
+    from collections import defaultdict
+
+    resource_map: "dict[int, Any]" = {}
+    scope_map: "dict[int, dict[tuple, list]]" = defaultdict(lambda: defaultdict(list))
+
+    for record in batch:
+        resource = getattr(record, "resource", None)
+        scope = getattr(record, "instrumentation_scope", None)
+        r_id = id(resource)
+        if r_id not in resource_map:
+            resource_map[r_id] = resource
+        scope_key = (
+            (scope.name or "") if scope else "",
+            (scope.version or "") if scope else "",
+        )
+        scope_map[r_id][scope_key].append(record)
+
+    resource_logs = []
+    for r_id, resource in resource_map.items():
+        scope_logs = []
+        for (scope_name, scope_version), records in scope_map[r_id].items():
+            log_records_json = []
+            for record in records:
+                lr = getattr(record, "log_record", record)
+                trace_id: int = getattr(lr, "trace_id", 0) or 0
+                span_id: int = getattr(lr, "span_id", 0) or 0
+                body_val = getattr(lr, "body", None)
+                body = str(body_val) if body_val is not None else ""
+
+                log_json: "dict[str, Any]" = {
+                    "timeUnixNano": str(getattr(lr, "timestamp", 0) or 0),
+                    "observedTimeUnixNano": str(getattr(lr, "observed_timestamp", 0) or 0),
+                    "severityNumber": getattr(getattr(lr, "severity_number", None), "value", 0),
+                    "severityText": getattr(lr, "severity_text", "") or "",
+                    "body": {"stringValue": body},
+                    "attributes": _attrs_to_otlp(getattr(lr, "attributes", None)),
+                }
+                if trace_id:
+                    log_json["traceId"] = format(trace_id, "032x")
+                if span_id:
+                    log_json["spanId"] = format(span_id, "016x")
+                log_records_json.append(log_json)
+
+            scope_logs.append({
+                "scope": {"name": scope_name, "version": scope_version},
+                "logRecords": log_records_json,
+            })
+
+        resource_attrs = getattr(resource, "attributes", None) if resource else None
+        resource_logs.append({
+            "resource": {"attributes": _attrs_to_otlp(resource_attrs)},
+            "scopeLogs": scope_logs,
+        })
+
+    return json.dumps({"resourceLogs": resource_logs}).encode()
 
 
 class EngineSpanExporter:

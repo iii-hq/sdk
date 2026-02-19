@@ -33,7 +33,6 @@ otel = [
     "opentelemetry-api>=1.25",
     "opentelemetry-sdk>=1.25",
     "opentelemetry-instrumentation-urllib>=0.46b0",
-    "opentelemetry-exporter-otlp-proto-http>=1.25",
 ]
 dev = [
     "pytest>=8.0",
@@ -43,7 +42,6 @@ dev = [
     "opentelemetry-api>=1.25",
     "opentelemetry-sdk>=1.25",
     "opentelemetry-instrumentation-urllib>=0.46b0",
-    "opentelemetry-exporter-otlp-proto-http>=1.25",
 ]
 
 [tool.hatch.build.targets.wheel]

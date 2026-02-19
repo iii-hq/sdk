@@ -30,12 +30,14 @@ export function patchGlobalFetch(tracer: Tracer): void {
     let scheme: string | undefined
     let path: string | undefined
     let port: number | undefined
+    let query: string | undefined
     try {
       const parsed = new URL(url)
       host = parsed.hostname
       scheme = parsed.protocol.replace(':', '')
       path = parsed.pathname
       port = parsed.port ? parseInt(parsed.port, 10) : undefined
+      query = parsed.search ? parsed.search.slice(1) : undefined
     } catch {
       // relative URL or invalid — skip host/scheme/path attributes
     }
@@ -51,6 +53,7 @@ export function patchGlobalFetch(tracer: Tracer): void {
     }
     if (path) spanAttributes['url.path'] = path
     if (port) spanAttributes['server.port'] = port
+    if (query) spanAttributes['url.query'] = query
 
     const spanName = path ? `${method} ${path}` : method
 
@@ -77,8 +80,6 @@ export function patchGlobalFetch(tracer: Tracer): void {
           if (response.status >= 400) {
             span.setAttribute('error.type', String(response.status))
             span.setStatus({ code: SpanStatusCode.ERROR })
-          } else {
-            span.setStatus({ code: SpanStatusCode.OK })
           }
 
           return response

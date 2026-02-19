@@ -224,7 +224,79 @@ describe('Fetch span attributes', () => {
     )
 
     expect(spanMock.setAttribute).toHaveBeenCalledWith('http.response.status_code', 200)
-    expect(spanMock.setStatus).toHaveBeenCalledWith({ code: SpanStatusCode.OK })
+    expect(spanMock.setStatus).not.toHaveBeenCalled()
+  })
+
+  it('sets url.query when query string is present', async () => {
+    const spanMock = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      recordException: vi.fn(),
+      end: vi.fn(),
+    }
+    const tracerMock = {
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
+    }
+
+    const { patchGlobalFetch, unpatchGlobalFetch } = await import(
+      '../src/telemetry-system/fetch-instrumentation'
+    )
+    unpatch = unpatchGlobalFetch
+
+    const fakeFetch = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    globalThis.fetch = fakeFetch
+
+    patchGlobalFetch(tracerMock as unknown as Tracer)
+
+    await globalThis.fetch('https://example.com/api/items?q=1&page=2')
+
+    expect(tracerMock.startActiveSpan).toHaveBeenCalledWith(
+      'GET /api/items',
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          'url.query': 'q=1&page=2',
+        }),
+      }),
+      expect.anything(),
+      expect.any(Function),
+    )
+  })
+
+  it('does not set url.query when no query string', async () => {
+    const spanMock = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      recordException: vi.fn(),
+      end: vi.fn(),
+    }
+    const tracerMock = {
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
+    }
+
+    const { patchGlobalFetch, unpatchGlobalFetch } = await import(
+      '../src/telemetry-system/fetch-instrumentation'
+    )
+    unpatch = unpatchGlobalFetch
+
+    const fakeFetch = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    globalThis.fetch = fakeFetch
+
+    patchGlobalFetch(tracerMock as unknown as Tracer)
+
+    await globalThis.fetch('https://example.com/api/items')
+
+    const callArgs = tracerMock.startActiveSpan.mock.calls[0][1] as { attributes: Record<string, unknown> }
+    expect(callArgs.attributes['url.query']).toBeUndefined()
   })
 
   it('sets error.type and ERROR status on 4xx response', async () => {

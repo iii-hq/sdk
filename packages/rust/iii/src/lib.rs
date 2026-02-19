@@ -34,6 +34,7 @@ pub use telemetry::{
         remove_baggage_entry, set_baggage_entry,
     },
     flush_otel, get_meter, get_tracer, init_otel, is_initialized, shutdown_otel,
+    http_instrumentation::execute_traced_request,
     types::OtelConfig,
     types::ReconnectionConfig,
     with_span,

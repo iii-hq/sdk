@@ -1,4 +1,5 @@
 pub mod connection;
+pub mod http_instrumentation;
 pub mod context;
 pub mod log_exporter;
 pub mod metrics_exporter;

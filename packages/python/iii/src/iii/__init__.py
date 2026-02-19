@@ -27,6 +27,8 @@ from .stream import (
     UpdateSet,
 )
 from .types import ApiRequest, ApiResponse, FunctionsAvailableCallback, RemoteFunctionHandler
+from .telemetry import get_tracer, init_otel, is_initialized, shutdown_otel
+from .telemetry_types import OtelConfig
 
 
 def configure_logging(level: int = logging.INFO, format: str | None = None) -> None:
@@ -80,6 +82,12 @@ __all__ = [
     # Callbacks
     "FunctionsAvailableCallback",
     "RemoteFunctionHandler",
+    # Telemetry
+    "OtelConfig",
+    "init_otel",
+    "shutdown_otel",
+    "get_tracer",
+    "is_initialized",
     # Utility
     "configure_logging",
 ]

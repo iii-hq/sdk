@@ -188,6 +188,8 @@ class III:
                     data.get("invocation_id"),
                     data.get("function_id", ""),
                     data.get("data"),
+                    data.get("traceparent"),
+                    data.get("baggage"),
                 )
             )
         elif msg_type == MessageType.REGISTER_TRIGGER.value:
@@ -204,7 +206,48 @@ class III:
         else:
             future.set_result(result)
 
-    async def _handle_invoke(self, invocation_id: str | None, path: str, data: Any) -> None:
+    def _inject_traceparent(self) -> str | None:
+        """Return the current OTel span context as a W3C traceparent string, or None."""
+        try:
+            from opentelemetry import context as otel_context, propagate
+            carrier: dict[str, str] = {}
+            propagate.inject(carrier, context=otel_context.get_current())
+            return carrier.get("traceparent")
+        except ImportError:
+            return None
+
+    async def _invoke_with_context(
+        self,
+        handler: Any,
+        data: Any,
+        traceparent: str | None,
+        baggage: str | None,
+    ) -> Any:
+        """Run handler inside the OTel context extracted from traceparent/baggage."""
+        try:
+            from opentelemetry import context as otel_context, propagate
+            carrier: dict[str, str] = {}
+            if traceparent:
+                carrier["traceparent"] = traceparent
+            if baggage:
+                carrier["baggage"] = baggage
+            parent_ctx = propagate.extract(carrier) if carrier else otel_context.get_current()
+            token = otel_context.attach(parent_ctx)
+            try:
+                return await handler(data)
+            finally:
+                otel_context.detach(token)
+        except ImportError:
+            return await handler(data)
+
+    async def _handle_invoke(
+        self,
+        invocation_id: str | None,
+        path: str,
+        data: Any,
+        traceparent: str | None = None,
+        baggage: str | None = None,
+    ) -> None:
         func = self._functions.get(path)
 
         if not func:
@@ -220,17 +263,20 @@ class III:
             return
 
         if not invocation_id:
-            coro = cast(Coroutine[Any, Any, Any], func.handler(data))
-            asyncio.create_task(coro)
+            asyncio.create_task(
+                self._invoke_with_context(func.handler, data, traceparent, baggage)
+            )
             return
 
         try:
-            result = await func.handler(data)
+            result = await self._invoke_with_context(func.handler, data, traceparent, baggage)
+            response_traceparent = self._inject_traceparent()
             await self._send(
                 InvocationResultMessage(
                     invocation_id=invocation_id,
                     function_id=path,
                     result=result,
+                    traceparent=response_traceparent,
                 )
             )
         except Exception as e:
@@ -331,6 +377,7 @@ class III:
                 function_id=path,
                 data=data,
                 invocation_id=invocation_id,
+                traceparent=self._inject_traceparent(),
             )
         )
 
@@ -342,7 +389,11 @@ class III:
 
     def call_void(self, path: str, data: Any) -> None:
         """Fire-and-forget invocation (no response expected)."""
-        msg = InvokeFunctionMessage(function_id=path, data=data)
+        msg = InvokeFunctionMessage(
+            function_id=path,
+            data=data,
+            traceparent=self._inject_traceparent(),
+        )
         try:
             asyncio.get_running_loop().create_task(self._send(msg))
         except RuntimeError:

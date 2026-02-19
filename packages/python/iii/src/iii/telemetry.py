@@ -194,6 +194,17 @@ def _reset_state() -> None:
     _initialized = False
 
 
+def attach_event_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Wire the running asyncio event loop into the OTel connection.
+
+    Call this from within an async context (e.g. III.connect()) after
+    init_otel() has been called without a loop so that SharedEngineConnection
+    starts sending buffered frames immediately.
+    """
+    if _initialized and _connection is not None and not _connection._started:
+        _connection.start(loop)
+
+
 def get_tracer() -> Any:
     """Return the active tracer, or None if OTel has not been initialized."""
     return _tracer

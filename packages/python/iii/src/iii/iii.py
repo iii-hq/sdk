@@ -69,6 +69,11 @@ class III:
     async def connect(self) -> None:
         """Connect to the WebSocket server."""
         self._running = True
+        try:
+            from .telemetry import attach_event_loop
+            attach_event_loop(asyncio.get_running_loop())
+        except ImportError:
+            pass
         await self._do_connect()
 
     async def shutdown(self) -> None:
@@ -86,6 +91,12 @@ class III:
         if self._ws:
             await self._ws.close()
             self._ws = None
+
+        try:
+            from .telemetry import shutdown_otel_async
+            await shutdown_otel_async()
+        except ImportError:
+            pass
 
     async def _do_connect(self) -> None:
         try:

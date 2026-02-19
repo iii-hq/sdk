@@ -101,6 +101,8 @@ class InvokeFunctionMessage(BaseModel):
     function_id: str = Field()
     data: Any
     invocation_id: str | None = Field(default=None)
+    traceparent: str | None = Field(default=None)
+    baggage: str | None = Field(default=None)
     message_type: MessageType = Field(default=MessageType.INVOKE_FUNCTION, alias="type")
 
 
@@ -111,6 +113,8 @@ class InvocationResultMessage(BaseModel):
     function_id: str = Field()
     result: Any = None
     error: Any = None
+    traceparent: str | None = Field(default=None)
+    baggage: str | None = Field(default=None)
     message_type: MessageType = Field(default=MessageType.INVOCATION_RESULT, alias="type")
 
 

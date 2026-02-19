@@ -400,6 +400,74 @@ describe('Fetch span attributes', () => {
     expect(calls).not.toContain('http.request.body.size')
   })
 
+  it('sets http.response.body.size from Content-Length response header', async () => {
+    const spanMock = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      recordException: vi.fn(),
+      end: vi.fn(),
+    }
+    const tracerMock = {
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
+    }
+
+    const { patchGlobalFetch, unpatchGlobalFetch } = await import(
+      '../src/telemetry-system/fetch-instrumentation'
+    )
+    unpatch = unpatchGlobalFetch
+
+    const fakeFetch = vi.fn().mockResolvedValue(
+      new Response('hello world', {
+        status: 200,
+        headers: { 'content-length': '11' },
+      }),
+    )
+    globalThis.fetch = fakeFetch
+
+    patchGlobalFetch(tracerMock as unknown as Tracer)
+
+    await globalThis.fetch('https://example.com/api')
+
+    expect(spanMock.setAttribute).toHaveBeenCalledWith('http.response.body.size', 11)
+  })
+
+  it('does not set http.response.body.size when Content-Length header absent', async () => {
+    const spanMock = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      recordException: vi.fn(),
+      end: vi.fn(),
+    }
+    const tracerMock = {
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
+    }
+
+    const { patchGlobalFetch, unpatchGlobalFetch } = await import(
+      '../src/telemetry-system/fetch-instrumentation'
+    )
+    unpatch = unpatchGlobalFetch
+
+    const fakeFetch = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    globalThis.fetch = fakeFetch
+
+    patchGlobalFetch(tracerMock as unknown as Tracer)
+
+    await globalThis.fetch('https://example.com/api')
+
+    const calls = spanMock.setAttribute.mock.calls.map(c => c[0])
+    expect(calls).not.toContain('http.response.body.size')
+  })
+
   it('sets error.type and ERROR status on 4xx response', async () => {
     const spanMock = {
       setAttribute: vi.fn(),

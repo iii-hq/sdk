@@ -93,6 +93,14 @@ export function patchGlobalFetch(tracer: Tracer): void {
 
           span.setAttribute('http.response.status_code', response.status)
 
+          const contentLength = response.headers.get('content-length')
+          if (contentLength !== null) {
+            const size = parseInt(contentLength, 10)
+            if (!Number.isNaN(size)) {
+              span.setAttribute('http.response.body.size', size)
+            }
+          }
+
           if (response.status >= 400) {
             span.setAttribute('error.type', String(response.status))
             span.setStatus({ code: SpanStatusCode.ERROR })

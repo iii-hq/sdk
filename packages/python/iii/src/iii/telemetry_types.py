@@ -27,3 +27,6 @@ class OtelConfig:
 
     fetch_instrumentation_enabled: bool = True
     """Auto-instrument urllib HTTP calls via URLLibInstrumentor. Defaults to True."""
+
+    otlp_endpoint: str | None = None
+    """OTLP HTTP base URL. Defaults to OTEL_EXPORTER_OTLP_ENDPOINT env var or http://localhost:4318."""

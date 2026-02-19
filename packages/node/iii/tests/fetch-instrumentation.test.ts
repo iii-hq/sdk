@@ -468,6 +468,125 @@ describe('Fetch span attributes', () => {
     expect(calls).not.toContain('http.response.body.size')
   })
 
+  it('captures http.request.header.content-type and http.request.header.accept', async () => {
+    const spanMock = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      recordException: vi.fn(),
+      end: vi.fn(),
+    }
+    const tracerMock = {
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
+    }
+
+    const { patchGlobalFetch, unpatchGlobalFetch } = await import(
+      '../src/telemetry-system/fetch-instrumentation'
+    )
+    unpatch = unpatchGlobalFetch
+
+    const fakeFetch = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    globalThis.fetch = fakeFetch
+
+    patchGlobalFetch(tracerMock as unknown as Tracer)
+
+    await globalThis.fetch('https://example.com/api', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: '{}',
+    })
+
+    expect(spanMock.setAttribute).toHaveBeenCalledWith(
+      'http.request.header.content-type',
+      'application/json',
+    )
+    expect(spanMock.setAttribute).toHaveBeenCalledWith(
+      'http.request.header.accept',
+      'application/json',
+    )
+  })
+
+  it('captures http.response.header.content-type', async () => {
+    const spanMock = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      recordException: vi.fn(),
+      end: vi.fn(),
+    }
+    const tracerMock = {
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
+    }
+
+    const { patchGlobalFetch, unpatchGlobalFetch } = await import(
+      '../src/telemetry-system/fetch-instrumentation'
+    )
+    unpatch = unpatchGlobalFetch
+
+    const fakeFetch = vi.fn().mockResolvedValue(
+      new Response('{}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    globalThis.fetch = fakeFetch
+
+    patchGlobalFetch(tracerMock as unknown as Tracer)
+
+    await globalThis.fetch('https://example.com/api')
+
+    expect(spanMock.setAttribute).toHaveBeenCalledWith(
+      'http.response.header.content-type',
+      'application/json',
+    )
+  })
+
+  it('does not set header attributes when headers are absent', async () => {
+    const spanMock = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      recordException: vi.fn(),
+      end: vi.fn(),
+    }
+    const tracerMock = {
+      startActiveSpan: vi
+        .fn()
+        .mockImplementation(
+          (_name: string, _opts: unknown, _ctx: unknown, fn: (span: typeof spanMock) => unknown) =>
+            fn(spanMock),
+        ),
+    }
+
+    const { patchGlobalFetch, unpatchGlobalFetch } = await import(
+      '../src/telemetry-system/fetch-instrumentation'
+    )
+    unpatch = unpatchGlobalFetch
+
+    // Use null body so the Response has no auto-set content-type header
+    const fakeFetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    globalThis.fetch = fakeFetch
+
+    patchGlobalFetch(tracerMock as unknown as Tracer)
+
+    await globalThis.fetch('https://example.com/api')
+
+    const calls = spanMock.setAttribute.mock.calls.map(c => c[0])
+    expect(calls).not.toContain('http.request.header.content-type')
+    expect(calls).not.toContain('http.request.header.accept')
+    expect(calls).not.toContain('http.response.header.content-type')
+  })
+
   it('sets error.type and ERROR status on 4xx response', async () => {
     const spanMock = {
       setAttribute: vi.fn(),

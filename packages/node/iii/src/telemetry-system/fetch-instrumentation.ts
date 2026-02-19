@@ -18,6 +18,9 @@ function getBodyByteSize(body: unknown): number | undefined {
   return undefined
 }
 
+const SAFE_REQUEST_HEADERS = ['content-type', 'accept'] as const
+const SAFE_RESPONSE_HEADERS = ['content-type'] as const
+
 let originalFetch: typeof globalThis.fetch | null = null
 
 /**
@@ -83,6 +86,13 @@ export function patchGlobalFetch(tracer: Tracer): void {
             headers.set(key, value)
           }
 
+          for (const name of SAFE_REQUEST_HEADERS) {
+            const value = headers.get(name)
+            if (value !== null) {
+              span.setAttribute(`http.request.header.${name}`, value)
+            }
+          }
+
           const requestBody = init?.body ?? (input instanceof Request ? input.body : undefined)
           const requestBodySize = getBodyByteSize(requestBody)
           if (requestBodySize !== undefined) {
@@ -98,6 +108,13 @@ export function patchGlobalFetch(tracer: Tracer): void {
             const size = parseInt(contentLength, 10)
             if (!Number.isNaN(size)) {
               span.setAttribute('http.response.body.size', size)
+            }
+          }
+
+          for (const name of SAFE_RESPONSE_HEADERS) {
+            const value = response.headers.get(name)
+            if (value !== null) {
+              span.setAttribute(`http.response.header.${name}`, value)
             }
           }
 

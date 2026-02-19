@@ -216,14 +216,28 @@ class III:
         except ImportError:
             return None
 
+    def _inject_baggage(self) -> str | None:
+        """Return the current OTel baggage as a W3C baggage header string, or None."""
+        try:
+            from opentelemetry import context as otel_context, propagate
+            carrier: dict[str, str] = {}
+            propagate.inject(carrier, context=otel_context.get_current())
+            return carrier.get("baggage")
+        except ImportError:
+            return None
+
     async def _invoke_with_context(
         self,
         handler: Any,
         data: Any,
         traceparent: str | None,
         baggage: str | None,
-    ) -> Any:
-        """Run handler inside the OTel context extracted from traceparent/baggage."""
+    ) -> tuple[Any, str | None]:
+        """Run handler inside the OTel context extracted from traceparent/baggage.
+
+        Returns (result, response_traceparent) where response_traceparent is captured
+        inside the attached context so it reflects the handler's span.
+        """
         try:
             from opentelemetry import context as otel_context, propagate
             carrier: dict[str, str] = {}
@@ -234,11 +248,13 @@ class III:
             parent_ctx = propagate.extract(carrier) if carrier else otel_context.get_current()
             token = otel_context.attach(parent_ctx)
             try:
-                return await handler(data)
+                result = await handler(data)
+                response_traceparent = self._inject_traceparent()
+                return result, response_traceparent
             finally:
                 otel_context.detach(token)
         except ImportError:
-            return await handler(data)
+            return await handler(data), None
 
     async def _handle_invoke(
         self,
@@ -269,8 +285,7 @@ class III:
             return
 
         try:
-            result = await self._invoke_with_context(func.handler, data, traceparent, baggage)
-            response_traceparent = self._inject_traceparent()
+            result, response_traceparent = await self._invoke_with_context(func.handler, data, traceparent, baggage)
             await self._send(
                 InvocationResultMessage(
                     invocation_id=invocation_id,
@@ -378,6 +393,7 @@ class III:
                 data=data,
                 invocation_id=invocation_id,
                 traceparent=self._inject_traceparent(),
+                baggage=self._inject_baggage(),
             )
         )
 
@@ -393,6 +409,7 @@ class III:
             function_id=path,
             data=data,
             traceparent=self._inject_traceparent(),
+            baggage=self._inject_baggage(),
         )
         try:
             asyncio.get_running_loop().create_task(self._send(msg))

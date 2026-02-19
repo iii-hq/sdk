@@ -92,7 +92,7 @@ def _attr_value(value: Any) -> "dict[str, Any]":
     if isinstance(value, bool):
         return {"boolValue": value}
     if isinstance(value, int):
-        return {"intValue": str(value)}
+        return {"intValue": value}
     if isinstance(value, float):
         return {"doubleValue": value}
     if isinstance(value, bytes):

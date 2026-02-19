@@ -72,6 +72,33 @@ def test_engine_span_exporter_sends_hex_trace_id():
     )
 
 
+def test_engine_span_exporter_int_attributes_are_json_numbers():
+    """intValue must be a JSON number (not string) for engine serde compatibility."""
+    conn = _make_mock_connection()
+    exporter = EngineSpanExporter(conn)
+
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    mem = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(mem))
+    tracer = provider.get_tracer("test")
+    with tracer.start_as_current_span("test-span", attributes={"http.status_code": 200}):
+        pass
+    span = mem.get_finished_spans()[0]
+
+    exporter.export([span])
+    _, payload = conn._sent[0]
+    parsed = json.loads(payload.decode())
+    attrs = parsed["resourceSpans"][0]["scopeSpans"][0]["spans"][0]["attributes"]
+    status_attr = next(a for a in attrs if a["key"] == "http.status_code")
+    # Must be a JSON number, not a string — engine's OtlpAnyValue uses i64
+    assert status_attr["value"]["intValue"] == 200
+    assert isinstance(status_attr["value"]["intValue"], int)
+
+
 def test_engine_span_exporter_returns_failure_on_error():
     conn = _make_mock_connection()
     conn.send_threadsafe.side_effect = RuntimeError("boom")

@@ -75,3 +75,16 @@ def test_telemetry_apis_exported_from_package():
     assert hasattr(iii, "get_tracer")
     assert hasattr(iii, "is_initialized")
     assert hasattr(iii, "OtelConfig")
+
+
+def test_init_configures_otlp_exporter():
+    """init_otel should attach a BatchSpanProcessor when enabled."""
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+    init_otel(OtelConfig(enabled=True, otlp_endpoint="http://localhost:4318"))
+    provider = trace.get_tracer_provider()
+    assert isinstance(provider, TracerProvider)
+    processors = provider._active_span_processor._span_processors
+    assert any(isinstance(p, BatchSpanProcessor) for p in processors)

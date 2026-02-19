@@ -77,12 +77,35 @@ def init_otel(config: OtelConfig | None = None) -> None:
     resource = Resource.create(resource_attrs)
     provider = TracerProvider(resource=resource)
     trace.set_tracer_provider(provider)
+    _configure_otlp_exporter(provider, cfg)
 
     _tracer = trace.get_tracer("iii-python-sdk")
     _initialized = True
 
     if cfg.fetch_instrumentation_enabled:
         _enable_fetch_instrumentation()
+
+
+def _configure_otlp_exporter(provider: Any, cfg: "OtelConfig") -> None:
+    """Attach an OTLP HTTP span exporter to the TracerProvider."""
+    try:
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    except ImportError:
+        import logging
+        logging.getLogger("iii.telemetry").warning(
+            "opentelemetry-exporter-otlp-proto-http not installed; "
+            "span export skipped. Install with: pip install 'iii-sdk[otel]'"
+        )
+        return
+
+    endpoint = (
+        cfg.otlp_endpoint
+        or os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
+        or "http://localhost:4318"
+    )
+    exporter = OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces")
+    provider.add_span_processor(BatchSpanProcessor(exporter))
 
 
 def _enable_fetch_instrumentation() -> None:

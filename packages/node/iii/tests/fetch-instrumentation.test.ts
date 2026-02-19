@@ -295,7 +295,9 @@ describe('Fetch span attributes', () => {
 
     await globalThis.fetch('https://example.com/api/items')
 
-    const callArgs = tracerMock.startActiveSpan.mock.calls[0][1] as { attributes: Record<string, unknown> }
+    const callArgs = tracerMock.startActiveSpan.mock.calls[0][1] as {
+      attributes: Record<string, unknown>
+    }
     expect(callArgs.attributes['url.query']).toBeUndefined()
   })
 

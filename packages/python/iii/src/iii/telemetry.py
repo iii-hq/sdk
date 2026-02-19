@@ -100,8 +100,7 @@ def _configure_otlp_exporter(provider: Any, cfg: "OtelConfig") -> None:
         return
 
     endpoint = (
-        cfg.otlp_endpoint
-        or os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
+        os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
         or "http://localhost:4318"
     )
     exporter = OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces")

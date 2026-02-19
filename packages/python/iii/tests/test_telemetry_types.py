@@ -22,13 +22,17 @@ def test_otel_config_explicit_values():
     assert config.fetch_instrumentation_enabled is False
 
 
-def test_otel_config_has_otlp_endpoint_field():
-    from iii.telemetry_types import OtelConfig
-    cfg = OtelConfig(otlp_endpoint="http://localhost:4318")
-    assert cfg.otlp_endpoint == "http://localhost:4318"
-
-
-def test_otel_config_otlp_endpoint_defaults_to_none():
-    from iii.telemetry_types import OtelConfig
+def test_otlp_endpoint_removed():
+    """otlp_endpoint is gone; engine_ws_url is the replacement."""
     cfg = OtelConfig()
-    assert cfg.otlp_endpoint is None
+    assert not hasattr(cfg, "otlp_endpoint")
+
+
+def test_logs_enabled_defaults_to_none():
+    cfg = OtelConfig()
+    assert cfg.logs_enabled is None
+
+
+def test_engine_ws_url_exists():
+    cfg = OtelConfig(engine_ws_url="ws://custom:1234")
+    assert cfg.engine_ws_url == "ws://custom:1234"

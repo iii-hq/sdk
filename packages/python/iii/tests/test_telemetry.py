@@ -2,7 +2,7 @@
 import urllib.request
 import pytest
 
-from iii.telemetry import get_tracer, init_otel, is_initialized, shutdown_otel
+from iii.telemetry import get_tracer, init_otel, is_initialized, shutdown_otel, shutdown_otel_async
 from iii.telemetry_types import OtelConfig
 
 # URLLibInstrumentor patches OpenerDirector.open, not urlopen directly
@@ -13,6 +13,13 @@ ORIGINAL_OPENER_OPEN = urllib.request.OpenerDirector.open
 def cleanup():
     yield
     shutdown_otel()
+    # Force-reset the global OTel log provider so tests don't bleed state
+    try:
+        import opentelemetry._logs._internal as _li
+        _li._LOGGER_PROVIDER = None
+        _li._LOGGER_PROVIDER_SET_ONCE._done = False
+    except Exception:
+        pass
     urllib.request.OpenerDirector.open = ORIGINAL_OPENER_OPEN
 
 
@@ -78,13 +85,49 @@ def test_telemetry_apis_exported_from_package():
 
 
 def test_init_configures_engine_span_exporter():
-    """init_otel should attach a BatchSpanProcessor when enabled."""
+    """init_otel wires a BatchSpanProcessor(EngineSpanExporter) on the TracerProvider."""
     from opentelemetry import trace
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from iii.telemetry_exporters import EngineSpanExporter
 
     init_otel(OtelConfig(enabled=True))
     provider = trace.get_tracer_provider()
     assert isinstance(provider, TracerProvider)
     processors = provider._active_span_processor._span_processors
-    assert any(isinstance(p, BatchSpanProcessor) for p in processors)
+    bsp = next((p for p in processors if isinstance(p, BatchSpanProcessor)), None)
+    assert bsp is not None
+    assert isinstance(bsp.span_exporter, EngineSpanExporter)
+
+
+def test_init_configures_log_provider():
+    """init_otel sets up a global SdkLoggerProvider with EngineLogExporter."""
+    from opentelemetry._logs import get_logger_provider
+    from opentelemetry.sdk._logs import LoggerProvider as SdkLoggerProvider
+
+    init_otel(OtelConfig(enabled=True))
+    lp = get_logger_provider()
+    assert isinstance(lp, SdkLoggerProvider)
+
+
+def test_init_logs_disabled():
+    """logs_enabled=False skips the logger provider setup."""
+    from opentelemetry._logs import get_logger_provider
+    from opentelemetry.sdk._logs import LoggerProvider as SdkLoggerProvider
+
+    init_otel(OtelConfig(enabled=True, logs_enabled=False))
+    lp = get_logger_provider()
+    assert not isinstance(lp, SdkLoggerProvider)
+
+
+def test_shutdown_closes_connection():
+    """shutdown_otel_async() closes the SharedEngineConnection."""
+    import asyncio
+    from iii.telemetry_exporters import SharedEngineConnection
+    from unittest.mock import patch, AsyncMock
+
+    with patch.object(SharedEngineConnection, "start"), \
+         patch.object(SharedEngineConnection, "shutdown", new_callable=AsyncMock) as mock_shutdown:
+        init_otel(OtelConfig(enabled=True))
+        asyncio.run(shutdown_otel_async())
+        mock_shutdown.assert_called_once()

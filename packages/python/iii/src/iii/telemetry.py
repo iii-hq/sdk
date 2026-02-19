@@ -1,11 +1,13 @@
-"""
-OpenTelemetry initialization for the III Python SDK.
+"""OpenTelemetry initialization for the III Python SDK.
 
 Provides init_otel() / shutdown_otel() which set up distributed tracing
-and auto-instrument urllib via the official URLLibInstrumentor.
+(via EngineSpanExporter), log export (via EngineLogExporter), and
+auto-instrument urllib via URLLibInstrumentor.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import uuid
 from typing import Any
@@ -13,27 +15,33 @@ from typing import Any
 from .telemetry_types import OtelConfig
 
 _tracer: Any = None
+_log_provider: Any = None
+_connection: Any = None  # SharedEngineConnection | None
 _initialized: bool = False
 _fetch_patched: bool = False
 
 _DEFAULT_SERVICE_NAME = "iii-python-sdk"
 
 
-def init_otel(config: OtelConfig | None = None) -> None:
+def init_otel(
+    config: OtelConfig | None = None,
+    loop: asyncio.AbstractEventLoop | None = None,
+) -> None:
     """Initialize OpenTelemetry. Subsequent calls are no-ops.
 
-    Requires opentelemetry-api, opentelemetry-sdk, and
-    opentelemetry-instrumentation-urllib to be installed.
-    Install with: pip install 'iii-sdk[otel]'
+    Args:
+        config: OTel configuration.
+        loop: Running asyncio event loop. When provided, SharedEngineConnection
+              starts immediately. When None, the connection is started lazily
+              on first use (pre-start buffer absorbs early frames).
     """
-    global _tracer, _initialized, _fetch_patched
+    global _tracer, _log_provider, _connection, _initialized, _fetch_patched
 
     if _initialized:
         return
 
     cfg = config or OtelConfig()
 
-    # Resolve enabled flag (env var OTEL_ENABLED overrides if config.enabled is None)
     enabled = cfg.enabled
     if enabled is None:
         env = os.environ.get("OTEL_ENABLED", "").lower()
@@ -46,6 +54,7 @@ def init_otel(config: OtelConfig | None = None) -> None:
         from opentelemetry import trace
         from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
         from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
     except ImportError as exc:
         raise ImportError(
             "opentelemetry-api and opentelemetry-sdk are required. "
@@ -75,36 +84,55 @@ def init_otel(config: OtelConfig | None = None) -> None:
         resource_attrs["service.namespace"] = cfg.service_namespace
 
     resource = Resource.create(resource_attrs)
-    provider = TracerProvider(resource=resource)
-    trace.set_tracer_provider(provider)
-    _configure_otlp_exporter(provider, cfg)
 
+    # --- Span exporter ---
+    from .telemetry_exporters import EngineSpanExporter, SharedEngineConnection
+
+    ws_url = (
+        cfg.engine_ws_url
+        or os.environ.get("III_BRIDGE_URL")
+        or "ws://localhost:49134"
+    )
+    _connection = SharedEngineConnection(ws_url)
+    if loop is not None:
+        _connection.start(loop)
+
+    span_exporter = EngineSpanExporter(_connection)
+    provider = TracerProvider(resource=resource)
+    provider.add_span_processor(BatchSpanProcessor(span_exporter))
+    trace.set_tracer_provider(provider)
     _tracer = trace.get_tracer("iii-python-sdk")
+
+    # --- Log exporter ---
+    logs_enabled = cfg.logs_enabled if cfg.logs_enabled is not None else True
+    if logs_enabled:
+        _configure_log_provider(resource, _connection)
+
     _initialized = True
 
     if cfg.fetch_instrumentation_enabled:
         _enable_fetch_instrumentation()
 
 
-def _configure_otlp_exporter(provider: Any, cfg: "OtelConfig") -> None:
-    """Attach an OTLP HTTP span exporter to the TracerProvider."""
+def _configure_log_provider(resource: Any, connection: Any) -> None:
+    """Set up a global SdkLoggerProvider with EngineLogExporter."""
+    global _log_provider
     try:
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        from opentelemetry import _logs
+        from opentelemetry.sdk._logs import LoggerProvider as SdkLoggerProvider
+        from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+        from .telemetry_exporters import EngineLogExporter
     except ImportError:
-        import logging
         logging.getLogger("iii.telemetry").warning(
-            "opentelemetry-exporter-otlp-proto-http not installed; "
-            "span export skipped. Install with: pip install 'iii-sdk[otel]'"
+            "opentelemetry-sdk logs not available; log export skipped."
         )
         return
 
-    endpoint = (
-        os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
-        or "http://localhost:4318"
-    )
-    exporter = OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces")
-    provider.add_span_processor(BatchSpanProcessor(exporter))
+    log_exporter = EngineLogExporter(connection)
+    log_provider = SdkLoggerProvider(resource=resource)
+    log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+    _logs.set_logger_provider(log_provider)
+    _log_provider = log_provider
 
 
 def _enable_fetch_instrumentation() -> None:
@@ -115,7 +143,6 @@ def _enable_fetch_instrumentation() -> None:
         URLLibInstrumentor().instrument()
         _fetch_patched = True
     except ImportError:
-        import logging
         logging.getLogger("iii.telemetry").warning(
             "opentelemetry-instrumentation-urllib not installed; "
             "urllib auto-instrumentation skipped. "
@@ -124,8 +151,20 @@ def _enable_fetch_instrumentation() -> None:
 
 
 def shutdown_otel() -> None:
-    """Shut down OTel and restore urllib to its original state."""
-    global _tracer, _initialized, _fetch_patched
+    """Shut down OTel synchronously (best-effort; does not await WS flush)."""
+    _reset_state()
+
+
+async def shutdown_otel_async() -> None:
+    """Shut down OTel and await WebSocket connection close."""
+    global _connection
+    if _connection is not None:
+        await _connection.shutdown()
+    _reset_state()
+
+
+def _reset_state() -> None:
+    global _tracer, _log_provider, _connection, _initialized, _fetch_patched
 
     if _fetch_patched:
         try:
@@ -143,8 +182,15 @@ def shutdown_otel() -> None:
                 provider.shutdown()
         except Exception:
             pass
+        try:
+            if _log_provider and hasattr(_log_provider, "shutdown"):
+                _log_provider.shutdown()
+        except Exception:
+            pass
 
     _tracer = None
+    _log_provider = None
+    _connection = None
     _initialized = False
 
 

@@ -224,7 +224,7 @@ describe('Fetch span attributes', () => {
     )
 
     expect(spanMock.setAttribute).toHaveBeenCalledWith('http.response.status_code', 200)
-    expect(spanMock.setStatus).not.toHaveBeenCalled()
+    expect(spanMock.setStatus).toHaveBeenCalledWith({ code: SpanStatusCode.OK })
   })
 
   it('sets url.query when query string is present', async () => {

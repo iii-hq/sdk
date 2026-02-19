@@ -77,6 +77,8 @@ export function patchGlobalFetch(tracer: Tracer): void {
           if (response.status >= 400) {
             span.setAttribute('error.type', String(response.status))
             span.setStatus({ code: SpanStatusCode.ERROR })
+          } else {
+            span.setStatus({ code: SpanStatusCode.OK })
           }
 
           return response

@@ -224,7 +224,7 @@ describe('Fetch span attributes', () => {
     )
 
     expect(spanMock.setAttribute).toHaveBeenCalledWith('http.response.status_code', 200)
-    expect(spanMock.setStatus).not.toHaveBeenCalled()
+    expect(spanMock.setStatus).toHaveBeenCalledWith({ code: SpanStatusCode.OK })
   })
 
   it('sets error.type and ERROR status on 4xx response', async () => {

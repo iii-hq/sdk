@@ -1,7 +1,9 @@
 import asyncio
+import json
 import random
 import string
 import time
+import urllib.request
 from datetime import datetime, timezone
 
 from iii import ApiRequest, ApiResponse
@@ -46,6 +48,16 @@ def _setup() -> None:
     use_api(
         {"api_path": "state/:id", "http_method": "GET", "description": "Get state by ID"},
         _get_state,
+    )
+
+    use_api(
+        {"api_path": "http-fetch", "http_method": "GET", "description": "Fetch a todo from JSONPlaceholder (tests urllib instrumentation)"},
+        _fetch_example,
+    )
+
+    use_api(
+        {"api_path": "http-fetch", "http_method": "POST", "description": "Post data to httpbin (tests urllib instrumentation)"},
+        _post_example,
     )
 
 
@@ -129,6 +141,27 @@ async def _get_state(req: ApiRequest, ctx) -> ApiResponse:
     todo_id = req.path_params.get("id")
     todo = await state.get("todo", todo_id)
     return ApiResponse(statusCode=200, body=todo, headers={"Content-Type": "application/json"})
+
+
+async def _fetch_example(req: ApiRequest, ctx) -> ApiResponse:
+    ctx.logger.info("Fetching todo from JSONPlaceholder")
+    with urllib.request.urlopen("https://jsonplaceholder.typicode.com/todos/1") as response:
+        data = json.loads(response.read().decode())
+    return ApiResponse(statusCode=200, body=data, headers={"Content-Type": "application/json"})
+
+
+async def _post_example(req: ApiRequest, ctx) -> ApiResponse:
+    ctx.logger.info("Posting to httpbin", {"body": req.body})
+    payload = json.dumps(req.body or {}).encode()
+    post_req = urllib.request.Request(
+        "https://httpbin.org/post",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(post_req) as response:
+        data = json.loads(response.read().decode())
+    return ApiResponse(statusCode=200, body=data, headers={"Content-Type": "application/json"})
 
 
 async def _async_main() -> None:

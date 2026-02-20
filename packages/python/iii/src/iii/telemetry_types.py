@@ -30,3 +30,9 @@ class OtelConfig:
 
     logs_enabled: bool | None = None
     """Enable OTel log export via EngineLogExporter. Defaults to True when OTel is enabled."""
+
+    metrics_enabled: bool = True
+    """Enable OTel metrics export via EngineMetricsExporter. Defaults to True."""
+
+    metrics_export_interval_ms: int = 60000
+    """Metrics export interval in milliseconds. Defaults to 60000 (60 seconds)."""

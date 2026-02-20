@@ -38,6 +38,7 @@ use crate::{
     protocol::{
         ErrorBody, Message, RegisterFunctionMessage, RegisterServiceMessage,
         RegisterTriggerMessage, RegisterTriggerTypeMessage, UnregisterTriggerMessage,
+        UnregisterTriggerTypeMessage,
     },
     triggers::{Trigger, TriggerConfig, TriggerHandler},
     types::{RemoteFunctionData, RemoteFunctionHandler, RemoteTriggerTypeData},
@@ -373,7 +374,7 @@ impl III {
                     Some(Uuid::new_v4().to_string()),
                     Some(function_id.clone()),
                 );
-                let context = Context { logger };
+                let context = Context { logger, span: None };
 
                 with_context(context, || user_handler(input)).await
             })
@@ -452,6 +453,8 @@ impl III {
     pub fn unregister_trigger_type(&self, id: impl Into<String>) {
         let id = id.into();
         self.inner.trigger_types.lock_or_recover().remove(&id);
+        let msg = UnregisterTriggerTypeMessage { id };
+        let _ = self.send_message(msg.to_message());
     }
 
     pub fn register_trigger(
@@ -970,7 +973,7 @@ impl III {
                 let parent_cx = extract_context(traceparent.as_deref(), baggage.as_deref());
                 let tracer = opentelemetry::global::tracer("iii-rust-sdk");
                 let span = tracer
-                    .span_builder(format!("invoke {}", function_id))
+                    .span_builder(format!("call {}", function_id))
                     .with_kind(SpanKind::Server)
                     .start_with_context(&tracer, &parent_cx);
                 parent_cx.with_span(span)

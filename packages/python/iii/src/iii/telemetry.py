@@ -15,6 +15,8 @@ from typing import Any
 from .telemetry_types import OtelConfig
 
 _tracer: Any = None
+_meter: Any = None
+_meter_provider: Any = None
 _log_provider: Any = None
 _connection: Any = None  # SharedEngineConnection | None
 _initialized: bool = False
@@ -55,7 +57,7 @@ def init_otel(
         from opentelemetry import trace
         from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
         from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
     except ImportError as exc:
         raise ImportError(
             "opentelemetry-api and opentelemetry-sdk are required. "
@@ -100,9 +102,13 @@ def init_otel(
 
     span_exporter = EngineSpanExporter(_connection)
     provider = TracerProvider(resource=resource)
-    provider.add_span_processor(SimpleSpanProcessor(span_exporter))
+    provider.add_span_processor(BatchSpanProcessor(span_exporter))
     trace.set_tracer_provider(provider)
     _tracer = trace.get_tracer("iii-python-sdk")
+
+    # --- Metrics exporter ---
+    if cfg.metrics_enabled:
+        _configure_meter_provider(resource, _connection, cfg, service_name)
 
     # --- Log exporter ---
     logs_enabled = cfg.logs_enabled if cfg.logs_enabled is not None else True
@@ -115,13 +121,43 @@ def init_otel(
         _enable_fetch_instrumentation()
 
 
+def _configure_meter_provider(
+    resource: Any,
+    connection: Any,
+    cfg: OtelConfig,
+    service_name: str,
+) -> None:
+    """Set up a global MeterProvider with EngineMetricsExporter."""
+    global _meter, _meter_provider
+    try:
+        from opentelemetry import metrics
+        from opentelemetry.sdk.metrics import MeterProvider
+        from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+        from .telemetry_exporters import EngineMetricsExporter
+    except ImportError:
+        logging.getLogger("iii.telemetry").warning(
+            "opentelemetry-sdk metrics not available; metrics export skipped."
+        )
+        return
+
+    metrics_exporter = EngineMetricsExporter(connection)
+    metric_reader = PeriodicExportingMetricReader(
+        metrics_exporter,
+        export_interval_millis=cfg.metrics_export_interval_ms,
+    )
+    meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
+    metrics.set_meter_provider(meter_provider)
+    _meter_provider = meter_provider
+    _meter = meter_provider.get_meter(service_name)
+
+
 def _configure_log_provider(resource: Any, connection: Any) -> None:
     """Set up a global SdkLoggerProvider with EngineLogExporter."""
     global _log_provider
     try:
         from opentelemetry import _logs
         from opentelemetry.sdk._logs import LoggerProvider as SdkLoggerProvider
-        from opentelemetry.sdk._logs.export import SimpleLogRecordProcessor
+        from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
         from .telemetry_exporters import EngineLogExporter
     except ImportError:
         logging.getLogger("iii.telemetry").warning(
@@ -131,7 +167,7 @@ def _configure_log_provider(resource: Any, connection: Any) -> None:
 
     log_exporter = EngineLogExporter(connection)
     log_provider = SdkLoggerProvider(resource=resource)
-    log_provider.add_log_record_processor(SimpleLogRecordProcessor(log_exporter))
+    log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
     _logs.set_logger_provider(log_provider)
     _log_provider = log_provider
 
@@ -260,7 +296,7 @@ async def shutdown_otel_async() -> None:
 
 
 def _reset_state() -> None:
-    global _tracer, _log_provider, _connection, _initialized, _fetch_patched
+    global _tracer, _meter, _meter_provider, _log_provider, _connection, _initialized, _fetch_patched
 
     if _fetch_patched:
         try:
@@ -280,12 +316,19 @@ def _reset_state() -> None:
         except Exception:
             pass
         try:
+            if _meter_provider and hasattr(_meter_provider, "shutdown"):
+                _meter_provider.shutdown()
+        except Exception:
+            pass
+        try:
             if _log_provider and hasattr(_log_provider, "shutdown"):
                 _log_provider.shutdown()
         except Exception:
             pass
 
     _tracer = None
+    _meter = None
+    _meter_provider = None
     _log_provider = None
     _connection = None
     _initialized = False
@@ -305,6 +348,11 @@ def attach_event_loop(loop: asyncio.AbstractEventLoop) -> None:
 def get_tracer() -> Any:
     """Return the active tracer, or None if OTel has not been initialized."""
     return _tracer
+
+
+def get_meter() -> Any:
+    """Return the active meter, or None if OTel metrics have not been initialized."""
+    return _meter
 
 
 def is_initialized() -> bool:

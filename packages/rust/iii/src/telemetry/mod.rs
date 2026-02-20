@@ -1,6 +1,7 @@
 pub mod connection;
 pub mod http_instrumentation;
 pub mod context;
+pub mod json_serializer;
 pub mod log_exporter;
 pub mod metrics_exporter;
 pub mod otel_worker_gauges;
@@ -61,7 +62,7 @@ pub async fn init_otel(config: OtelConfig) {
     let enabled = config.enabled.unwrap_or_else(|| {
         std::env::var("OTEL_ENABLED")
             .map(|v| v == "true" || v == "1")
-            .unwrap_or(false)
+            .unwrap_or(true)
     });
 
     if !enabled {
@@ -323,4 +324,19 @@ pub fn get_meter() -> opentelemetry::metrics::Meter {
 /// Check whether OpenTelemetry has been initialized.
 pub fn is_initialized() -> bool {
     OTEL_INITIALIZED.load(Ordering::Acquire)
+}
+
+/// Get a clone of the logger provider, if OTel has been initialized and logs are enabled.
+///
+/// Returns `None` if OTel is not initialized or logs are disabled.
+/// This is used by the SDK logger to emit OTel LogRecords alongside the
+/// engine invoker calls.
+pub fn get_logger_provider() -> Option<SdkLoggerProvider> {
+    if !is_initialized() {
+        return None;
+    }
+    // Try to acquire the lock without blocking. If contended, skip emission.
+    let lock = get_otel_lock();
+    let state = lock.try_lock().ok()?;
+    state.as_ref()?.logger_provider.clone()
 }

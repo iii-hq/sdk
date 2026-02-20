@@ -92,26 +92,36 @@ class Logger:
         except Exception:
             return False
 
+    def _emit(self, level: str, message: str, data: Any = None) -> None:
+        """Emit a log message via OTel, WS invoker, or Python logging (fallback).
+
+        Priority: OTel first, then WS invoker, then Python logging.
+        Only ONE path fires per call to avoid double-emit.
+        """
+        if self._emit_otel(level, message, data):
+            return
+        if self._invoker:
+            engine_method = f"engine::log::{level}"
+            self._invoker(engine_method, self._build_params(message, data))
+            return
+        # Final fallback: Python logging
+        _LOG_METHODS = {
+            "info": log.info,
+            "warn": log.warning,
+            "error": log.error,
+            "debug": log.debug,
+        }
+        log_fn = _LOG_METHODS.get(level, log.info)
+        log_fn("[%s] %s", self._function_name, message, extra={"data": data})
+
     def info(self, message: str, data: Any = None) -> None:
-        if not self._emit_otel("info", message, data):
-            if self._invoker:
-                self._invoker("engine::log::info", self._build_params(message, data))
-        log.info("[%s] %s", self._function_name, message, extra={"data": data})
+        self._emit("info", message, data)
 
     def warn(self, message: str, data: Any = None) -> None:
-        if not self._emit_otel("warn", message, data):
-            if self._invoker:
-                self._invoker("engine::log::warn", self._build_params(message, data))
-        log.warning("[%s] %s", self._function_name, message, extra={"data": data})
+        self._emit("warn", message, data)
 
     def error(self, message: str, data: Any = None) -> None:
-        if not self._emit_otel("error", message, data):
-            if self._invoker:
-                self._invoker("engine::log::error", self._build_params(message, data))
-        log.error("[%s] %s", self._function_name, message, extra={"data": data})
+        self._emit("error", message, data)
 
     def debug(self, message: str, data: Any = None) -> None:
-        if not self._emit_otel("debug", message, data):
-            if self._invoker:
-                self._invoker("engine::log::debug", self._build_params(message, data))
-        log.debug("[%s] %s", self._function_name, message, extra={"data": data})
+        self._emit("debug", message, data)

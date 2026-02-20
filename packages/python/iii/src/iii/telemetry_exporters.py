@@ -1,14 +1,16 @@
 """WebSocket-based OTel exporters for the III Engine.
 
-Spans → binary WS frame: b"OTLP" + OTLP JSON bytes
-Logs  → binary WS frame: b"LOGS" + OTLP JSON bytes
+Spans   → binary WS frame: b"OTLP" + OTLP JSON bytes
+Logs    → binary WS frame: b"LOGS" + OTLP JSON bytes
+Metrics → binary WS frame: b"MTRC" + OTLP JSON bytes
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from collections import deque
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
 if TYPE_CHECKING:
     pass
@@ -37,10 +39,14 @@ class SharedEngineConnection:
     def start(self, loop: asyncio.AbstractEventLoop) -> None:
         """Start the connection on the given event loop. Call once after connect()."""
         self._loop = loop
-        self._queue = asyncio.Queue()
+        self._queue = asyncio.Queue(maxsize=self.MAX_QUEUE)
         # Drain pre-start buffer into asyncio queue
         while self._pre_start_buffer:
-            self._queue.put_nowait(self._pre_start_buffer.popleft())
+            try:
+                self._queue.put_nowait(self._pre_start_buffer.popleft())
+            except asyncio.QueueFull:
+                log.warning("[OTel] Queue full during pre-start drain, dropping message")
+                break
         self._task = loop.create_task(self._run())
         self._started = True
 
@@ -48,13 +54,19 @@ class SharedEngineConnection:
         """Enqueue a binary frame from any thread.
 
         If called before start(), frames are buffered in _pre_start_buffer.
+        When the queue is full, the message is dropped with a warning.
         """
         if not self._started or self._loop is None or self._queue is None:
             self._pre_start_buffer.append((prefix, payload))
             return
-        asyncio.run_coroutine_threadsafe(
-            self._queue.put((prefix, payload)), self._loop
-        )
+
+        async def _try_put() -> None:
+            try:
+                self._queue.put_nowait((prefix, payload))  # type: ignore[union-attr]
+            except asyncio.QueueFull:
+                log.warning("[OTel] Telemetry queue full, dropping message")
+
+        asyncio.run_coroutine_threadsafe(_try_put(), self._loop)
 
     async def _run(self) -> None:
         """Main reconnect loop — runs as an asyncio Task."""
@@ -73,8 +85,9 @@ class SharedEngineConnection:
             except asyncio.CancelledError:
                 return
             except Exception as exc:
-                log.warning("OTel WS disconnected (%s), retrying in %.1fs", exc, delay)
-                await asyncio.sleep(delay)
+                jittered_delay = delay * (1 + random.uniform(-0.3, 0.3))
+                log.warning("OTel WS disconnected (%s), retrying in %.1fs", exc, jittered_delay)
+                await asyncio.sleep(jittered_delay)
                 delay = min(delay * 2, 30.0)
 
     async def shutdown(self) -> None:
@@ -292,4 +305,154 @@ class EngineLogExporter:
         pass
 
     def force_flush(self, timeout_millis: int = 30_000) -> bool:
+        return True
+
+
+PREFIX_METRICS = b"MTRC"
+
+
+def _serialize_metrics(metrics_data: Any) -> bytes:
+    """Serialize SDK MetricsData to OTLP JSON (ExportMetricsServiceRequest).
+
+    Matches the format produced by the Node.js JsonMetricsSerializer.serializeRequest().
+    """
+    import json
+
+    resource_metrics = []
+
+    for resource_metric in metrics_data.resource_metrics:
+        resource = resource_metric.resource
+        scope_metrics_json = []
+
+        for scope_metric in resource_metric.scope_metrics:
+            scope = scope_metric.scope
+            metrics_json = []
+
+            for metric in scope_metric.metrics:
+                metric_json: dict[str, Any] = {
+                    "name": metric.name,
+                    "description": metric.description or "",
+                    "unit": metric.unit or "",
+                }
+
+                data = metric.data
+                data_points_json = []
+
+                for pt in data.data_points:
+                    dp: dict[str, Any] = {
+                        "attributes": _attrs_to_otlp(
+                            pt.attributes if hasattr(pt, "attributes") else None
+                        ),
+                        "startTimeUnixNano": str(
+                            pt.start_time_unix_nano
+                            if hasattr(pt, "start_time_unix_nano")
+                            else 0
+                        ),
+                        "timeUnixNano": str(
+                            pt.time_unix_nano
+                            if hasattr(pt, "time_unix_nano")
+                            else 0
+                        ),
+                    }
+
+                    # NumberDataPoint: has value as int or float
+                    if hasattr(pt, "value"):
+                        val = pt.value
+                        if isinstance(val, int):
+                            dp["asInt"] = str(val)
+                        else:
+                            dp["asDouble"] = val
+
+                    # HistogramDataPoint
+                    if hasattr(pt, "bucket_counts"):
+                        dp["count"] = str(pt.count) if hasattr(pt, "count") else "0"
+                        dp["sum"] = pt.sum if hasattr(pt, "sum") else 0
+                        dp["bucketCounts"] = [
+                            str(c) for c in pt.bucket_counts
+                        ]
+                        dp["explicitBounds"] = list(pt.explicit_bounds) if hasattr(pt, "explicit_bounds") else []
+                        dp["min"] = pt.min if hasattr(pt, "min") else 0
+                        dp["max"] = pt.max if hasattr(pt, "max") else 0
+
+                    data_points_json.append(dp)
+
+                # Determine data type from the SDK data class name
+                data_type_name = type(data).__name__
+                if "Histogram" in data_type_name:
+                    metric_json["histogram"] = {
+                        "dataPoints": data_points_json,
+                        "aggregationTemporality": _temporality_value(data),
+                    }
+                elif "Sum" in data_type_name:
+                    metric_json["sum"] = {
+                        "dataPoints": data_points_json,
+                        "aggregationTemporality": _temporality_value(data),
+                        "isMonotonic": getattr(data, "is_monotonic", False),
+                    }
+                else:
+                    # Gauge
+                    metric_json["gauge"] = {
+                        "dataPoints": data_points_json,
+                    }
+
+                metrics_json.append(metric_json)
+
+            scope_metrics_json.append({
+                "scope": {
+                    "name": scope.name if scope else "",
+                    "version": scope.version if scope else "",
+                },
+                "metrics": metrics_json,
+            })
+
+        resource_metrics.append({
+            "resource": {
+                "attributes": _attrs_to_otlp(resource.attributes if resource else None),
+            },
+            "scopeMetrics": scope_metrics_json,
+        })
+
+    return json.dumps({"resourceMetrics": resource_metrics}).encode()
+
+
+def _temporality_value(data: Any) -> int:
+    """Extract the AggregationTemporality int value from SDK data."""
+    temporality = getattr(data, "aggregation_temporality", None)
+    if temporality is not None:
+        return temporality.value if hasattr(temporality, "value") else int(temporality)
+    return 1  # AGGREGATION_TEMPORALITY_DELTA default
+
+
+class EngineMetricsExporter:
+    """MetricExporter that sends OTLP JSON over the engine WebSocket connection.
+
+    Implements the PushMetricExporter interface from opentelemetry.sdk.metrics.export.
+    """
+
+    def __init__(self, connection: SharedEngineConnection) -> None:
+        self._connection = connection
+        # Required by PeriodicExportingMetricReader
+        self._preferred_temporality = {}
+        self._preferred_aggregation = {}
+
+    def export(
+        self,
+        metrics_data: Any,
+        timeout_millis: float = 10_000,
+        **kwargs: Any,
+    ) -> "MetricExportResult":
+        from opentelemetry.sdk.metrics.export import MetricExportResult
+
+        try:
+            json_bytes = _serialize_metrics(metrics_data)
+            self._connection.send_threadsafe(PREFIX_METRICS, json_bytes)
+            return MetricExportResult.SUCCESS
+        except Exception:
+            log.exception("EngineMetricsExporter.export failed")
+            return MetricExportResult.FAILURE
+
+    def shutdown(self, timeout_millis: float = 30_000, **kwargs: Any) -> None:
+        pass
+
+    def force_flush(self, timeout_millis: float = 10_000) -> bool:
         return True

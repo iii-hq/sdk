@@ -142,7 +142,9 @@ pub struct DeleteResult {
 /// Input for the stream update function
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamUpdateInput {
-    pub key: String,
+    pub stream_name: String,
+    pub group_id: String,
+    pub item_id: String,
     pub ops: Vec<UpdateOp>,
 }
 

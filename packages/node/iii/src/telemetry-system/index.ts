@@ -20,7 +20,7 @@ import {
   type Tracer,
   type Meter,
 } from '@opentelemetry/api'
-import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics'
 import {
   CompositePropagator,
@@ -29,7 +29,7 @@ import {
 } from '@opentelemetry/core'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
 import { registerInstrumentations } from '@opentelemetry/instrumentation'
-import { LoggerProvider, SimpleLogRecordProcessor } from '@opentelemetry/sdk-logs'
+import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs'
 import { type Logger, SeverityNumber } from '@opentelemetry/api-logs'
 
 import {
@@ -103,7 +103,7 @@ export function initOtel(config: OtelConfig = {}): void {
   const spanExporter = new EngineSpanExporter(sharedConnection)
   tracerProvider = new NodeTracerProvider({
     resource,
-    spanProcessors: [new SimpleSpanProcessor(spanExporter)],
+    spanProcessors: [new BatchSpanProcessor(spanExporter)],
   })
 
   // Register W3C Trace Context and Baggage propagators
@@ -167,7 +167,7 @@ export function initOtel(config: OtelConfig = {}): void {
   // Initialize logs (always enabled when OTEL is enabled)
   const logExporter = new EngineLogExporter(sharedConnection)
   loggerProvider = new LoggerProvider({ resource })
-  loggerProvider.addLogRecordProcessor(new SimpleLogRecordProcessor(logExporter))
+  loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(logExporter))
   logger = loggerProvider.getLogger(serviceName)
 
   console.debug('[OTel] Logs initialized')
@@ -178,16 +178,19 @@ export function initOtel(config: OtelConfig = {}): void {
  */
 export async function shutdownOtel(): Promise<void> {
   if (tracerProvider) {
+    await tracerProvider.forceFlush()
     await tracerProvider.shutdown()
     tracerProvider = null
   }
 
   if (meterProvider) {
+    await meterProvider.forceFlush()
     await meterProvider.shutdown()
     meterProvider = null
   }
 
   if (loggerProvider) {
+    await loggerProvider.forceFlush()
     await loggerProvider.shutdown()
     loggerProvider = null
   }

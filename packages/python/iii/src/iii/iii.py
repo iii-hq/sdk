@@ -5,10 +5,11 @@ import json
 import logging
 import os
 import platform
+import random
 import uuid
 from dataclasses import dataclass
 from importlib.metadata import version
-from typing import Any, Awaitable, Callable, Coroutine, cast
+from typing import Any, Awaitable, Callable, Literal, cast
 
 import websockets
 from websockets.asyncio.client import ClientConnection
@@ -23,6 +24,7 @@ from .iii_types import (
     RegisterServiceMessage,
     RegisterTriggerMessage,
     RegisterTriggerTypeMessage,
+    UnregisterFunctionMessage,
     UnregisterTriggerMessage,
     UnregisterTriggerTypeMessage,
     WorkerInfo,
@@ -36,12 +38,49 @@ RemoteFunctionHandler = Callable[[Any], Awaitable[Any]]
 
 log = logging.getLogger("iii.iii")
 
+IIIConnectionState = Literal["disconnected", "connecting", "connected", "reconnecting", "failed"]
+
+ConnectionStateCallback = Callable[["IIIConnectionState"], None]
+
+
+@dataclass
+class ReconnectionConfig:
+    """Configuration for WebSocket reconnection behavior."""
+
+    initial_delay_ms: int = 1000
+    """Starting delay in milliseconds."""
+    max_delay_ms: int = 30000
+    """Maximum delay cap in milliseconds."""
+    backoff_multiplier: float = 2.0
+    """Exponential backoff multiplier."""
+    jitter_factor: float = 0.3
+    """Random jitter factor 0-1."""
+    max_retries: int = -1
+    """Maximum retry attempts, -1 for infinite."""
+
+
+DEFAULT_RECONNECTION_CONFIG = ReconnectionConfig()
+DEFAULT_INVOCATION_TIMEOUT_MS = 30000
+MAX_QUEUE_SIZE = 1000
+
+
+@dataclass
+class FunctionRef:
+    """Reference to a registered function, allowing programmatic unregistration."""
+
+    id: str
+    unregister: Callable[[], None]
+
 
 @dataclass
 class InitOptions:
     """Options for configuring the III SDK."""
 
     worker_name: str | None = None
+    enable_metrics_reporting: bool = True
+    invocation_timeout_ms: int = DEFAULT_INVOCATION_TIMEOUT_MS
+    reconnection_config: ReconnectionConfig | None = None
+    otel: dict[str, Any] | None = None
 
 
 class III:
@@ -63,6 +102,11 @@ class III:
         self._functions_available_callbacks: set[Callable[[list[FunctionInfo]], None]] = set()
         self._functions_available_trigger: Trigger | None = None
         self._functions_available_function_id: str | None = None
+        self._reconnection_config = self._options.reconnection_config or DEFAULT_RECONNECTION_CONFIG
+        self._reconnect_attempt = 0
+        self._connection_state: IIIConnectionState = "disconnected"
+        self._state_callbacks: set[ConnectionStateCallback] = set()
+        self._worker_id: str | None = None
 
     # Connection management
 
@@ -72,13 +116,11 @@ class III:
         try:
             from .telemetry import init_otel, attach_event_loop
             loop = asyncio.get_running_loop()
-            # Auto-initialize OTel using env vars (OTEL_ENABLED etc.) if not already done.
-            # If the caller already called init_otel() this is a no-op.
             init_otel(loop=loop)
-            # Wire the loop if init_otel() was called earlier without one.
             attach_event_loop(loop)
         except ImportError:
             pass
+        self._set_connection_state("connecting")
         await self._do_connect()
 
     async def shutdown(self) -> None:
@@ -93,9 +135,18 @@ class III:
                 except asyncio.CancelledError:
                     pass
 
+        # Reject all pending invocations
+        for invocation_id, future in list(self._pending.items()):
+            if not future.done():
+                future.set_exception(Exception("iii is shutting down"))
+        self._pending.clear()
+
         if self._ws:
             await self._ws.close()
             self._ws = None
+
+        self._state_callbacks.clear()
+        self._set_connection_state("disconnected")
 
         try:
             from .telemetry import shutdown_otel_async
@@ -119,11 +170,28 @@ class III:
             self._reconnect_task = asyncio.create_task(self._reconnect_loop())
 
     async def _reconnect_loop(self) -> None:
+        config = self._reconnection_config
         while self._running and not self._ws:
-            await asyncio.sleep(2)
+            if config.max_retries != -1 and self._reconnect_attempt >= config.max_retries:
+                self._set_connection_state("failed")
+                log.error(f"Max reconnection retries ({config.max_retries}) reached, giving up")
+                return
+
+            exponential_delay = config.initial_delay_ms * (config.backoff_multiplier ** self._reconnect_attempt)
+            capped_delay = min(exponential_delay, config.max_delay_ms)
+            jitter = capped_delay * config.jitter_factor * (2 * random.random() - 1)
+            delay_ms = max(0, capped_delay + jitter)
+
+            self._set_connection_state("reconnecting")
+            log.debug(f"Reconnecting in {delay_ms:.0f}ms (attempt {self._reconnect_attempt + 1})")
+
+            await asyncio.sleep(delay_ms / 1000.0)
+            self._reconnect_attempt += 1
             await self._do_connect()
 
     async def _on_connected(self) -> None:
+        self._reconnect_attempt = 0
+        self._set_connection_state("connected")
         # Re-register all
         for trigger_type_data in self._trigger_types.values():
             await self._send(trigger_type_data.message)
@@ -134,9 +202,11 @@ class III:
         for trigger in self._triggers.values():
             await self._send(trigger)
 
-        # Flush queue
-        while self._queue and self._ws:
-            await self._ws.send(json.dumps(self._queue.pop(0)))
+        # Flush queue (swap to avoid O(n^2) pop(0))
+        pending, self._queue = self._queue, []
+        for queued_msg in pending:
+            if self._ws:
+                await self._ws.send(json.dumps(queued_msg))
 
         # Register worker metadata
         self._register_worker_metadata()
@@ -152,6 +222,7 @@ class III:
         except websockets.ConnectionClosed:
             log.debug("Connection closed")
             self._ws = None
+            self._set_connection_state("disconnected")
             if self._running:
                 self._schedule_reconnect()
 
@@ -173,19 +244,34 @@ class III:
             log.debug(f"Send: {json.dumps(data)[:200]}")
             await self._ws.send(json.dumps(data))
         else:
+            if len(self._queue) >= MAX_QUEUE_SIZE:
+                log.warning("Message queue full, dropping oldest message")
+                self._queue.pop(0)
             self._queue.append(data)
 
     def _enqueue(self, msg: Any) -> None:
-        self._queue.append(self._to_dict(msg))
+        data = self._to_dict(msg)
+        if len(self._queue) >= MAX_QUEUE_SIZE:
+            log.warning("Message queue full, dropping oldest message")
+            self._queue.pop(0)
+        self._queue.append(data)
 
     def _send_if_connected(self, msg: Any) -> None:
         if not (self._ws and self._ws.state.name == "OPEN"):
             return
         try:
-            asyncio.get_running_loop().create_task(self._send(msg))
+            task = asyncio.get_running_loop().create_task(self._send(msg))
+            task.add_done_callback(self._log_task_exception)
         except RuntimeError:
-            # If there is no running event loop, replay-on-connect still preserves durable state.
             pass
+
+    @staticmethod
+    def _log_task_exception(task: asyncio.Task[Any]) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc:
+            log.error(f"Error in fire-and-forget send: {exc}")
 
     async def _handle_message(self, raw: str | bytes) -> None:
         data = json.loads(raw if isinstance(raw, str) else raw.decode())
@@ -210,6 +296,10 @@ class III:
             )
         elif msg_type == MessageType.REGISTER_TRIGGER.value:
             asyncio.create_task(self._handle_trigger_registration(data))
+        elif msg_type == MessageType.WORKER_REGISTERED.value:
+            worker_id = data.get("worker_id", "")
+            self._worker_id = worker_id
+            log.debug(f"Worker registered with ID: {worker_id}")
 
     def _handle_result(self, invocation_id: str, result: Any, error: Any) -> None:
         future = self._pending.pop(invocation_id, None)
@@ -295,9 +385,10 @@ class III:
             return
 
         if not invocation_id:
-            asyncio.create_task(
+            task = asyncio.create_task(
                 self._invoke_with_context(func.handler, data, traceparent, baggage)
             )
+            task.add_done_callback(self._log_task_exception)
             return
 
         try:
@@ -347,6 +438,42 @@ class III:
             log.exception(f"Error registering trigger {trigger_id}")
             await self._send({**result_base, "error": {"code": "trigger_registration_failed", "message": str(e)}})
 
+    # Connection state management
+
+    def _set_connection_state(self, state: IIIConnectionState) -> None:
+        if self._connection_state != state:
+            self._connection_state = state
+            for callback in self._state_callbacks:
+                try:
+                    callback(state)
+                except Exception:
+                    log.exception("Error in connection state callback")
+
+    def get_connection_state(self) -> IIIConnectionState:
+        """Get the current connection state."""
+        return self._connection_state
+
+    def on_connection_state_change(self, callback: ConnectionStateCallback) -> Callable[[], None]:
+        """Register a callback to be notified of connection state changes.
+
+        The callback is immediately invoked with the current state.
+
+        Returns:
+            A function to unregister the callback.
+        """
+        self._state_callbacks.add(callback)
+        callback(self._connection_state)
+
+        def unsubscribe() -> None:
+            self._state_callbacks.discard(callback)
+
+        return unsubscribe
+
+    @property
+    def worker_id(self) -> str | None:
+        """The worker ID assigned by the engine, or None if not yet registered."""
+        return self._worker_id
+
     # Public API
 
     def register_trigger_type(self, id: str, description: str, handler: TriggerHandler[Any]) -> None:
@@ -371,11 +498,14 @@ class III:
 
         def unregister() -> None:
             self._triggers.pop(trigger_id, None)
-            self._send_if_connected(UnregisterTriggerMessage(id=trigger_id, trigger_type=msg.type))
+            self._send_if_connected(UnregisterTriggerMessage(id=trigger_id, trigger_type=msg.trigger_type))
 
         return Trigger(unregister)
 
-    def register_function(self, path: str, handler: RemoteFunctionHandler, description: str | None = None) -> None:
+    def register_function(self, path: str, handler: RemoteFunctionHandler, description: str | None = None) -> FunctionRef:
+        if not path or not path.strip():
+            raise ValueError("id is required")
+
         msg = RegisterFunctionMessage(id=path, description=description)
         self._send_if_connected(msg)
 
@@ -390,6 +520,12 @@ class III:
             return await with_context(lambda _: handler(input_data), ctx)
 
         self._functions[path] = RemoteFunctionData(message=msg, handler=wrapped)
+
+        def unregister() -> None:
+            self._functions.pop(path, None)
+            self._send_if_connected(UnregisterFunctionMessage(id=path))
+
+        return FunctionRef(id=path, unregister=unregister)
 
     def register_service(self, id: str, description: str | None = None, parent_id: str | None = None) -> None:
         msg = RegisterServiceMessage(id=id, description=description, parent_service_id=parent_id)
@@ -503,21 +639,16 @@ class III:
     def on(self, event: str, callback: Callable[..., None]) -> Callable[[], None]:
         """Subscribe to an event.
 
-        This is a no-op in Python due to the different event model of websockets.
-        Provided for API compatibility with Node.js client.
+        Not supported in the Python SDK. Use on_connection_state_change() or
+        on_functions_available() instead.
 
-        Args:
-            event: The event name to subscribe to.
-            callback: The callback function to call when the event occurs.
-
-        Returns:
-            An unsubscribe function (no-op).
+        Raises:
+            NotImplementedError: Always raised. Use specific event methods instead.
         """
-
-        def unsubscribe() -> None:
-            pass
-
-        return unsubscribe
+        raise NotImplementedError(
+            "on() is not supported in the Python SDK. "
+            "Use on_connection_state_change() or on_functions_available() instead."
+        )
 
     def create_stream(self, stream_name: str, stream: IStream[Any]) -> None:
         """Register stream functions for a given stream.
@@ -566,9 +697,9 @@ class III:
             result = await stream.update(input_data)
             return result.model_dump() if result else None
 
-        self.register_function(f"{stream_name}::get", get_handler)
-        self.register_function(f"{stream_name}::set", set_handler)
-        self.register_function(f"{stream_name}::delete", delete_handler)
-        self.register_function(f"{stream_name}::list", list_handler)
-        self.register_function(f"{stream_name}::list_groups", list_groups_handler)
-        self.register_function(f"{stream_name}::update", update_handler)
+        self.register_function(f"stream::get({stream_name})", get_handler)
+        self.register_function(f"stream::set({stream_name})", set_handler)
+        self.register_function(f"stream::delete({stream_name})", delete_handler)
+        self.register_function(f"stream::list({stream_name})", list_handler)
+        self.register_function(f"stream::list_groups({stream_name})", list_groups_handler)
+        self.register_function(f"stream::update({stream_name})", update_handler)

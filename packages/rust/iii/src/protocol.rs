@@ -26,6 +26,9 @@ pub enum Message {
         id: String,
         trigger_type: String,
     },
+    UnregisterTriggerType {
+        id: String,
+    },
     RegisterFunction {
         id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -116,6 +119,19 @@ impl UnregisterTriggerMessage {
         Message::UnregisterTrigger {
             id: self.id.clone(),
             trigger_type: self.trigger_type.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnregisterTriggerTypeMessage {
+    pub id: String,
+}
+
+impl UnregisterTriggerTypeMessage {
+    pub fn to_message(&self) -> Message {
+        Message::UnregisterTriggerType {
+            id: self.id.clone(),
         }
     }
 }

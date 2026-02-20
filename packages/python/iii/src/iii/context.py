@@ -1,7 +1,7 @@
 """Context management for the III SDK."""
 
 from contextvars import ContextVar
-from typing import Awaitable, Callable, TypeVar
+from typing import Any, Awaitable, Callable, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
@@ -16,6 +16,8 @@ class Context(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     logger: Logger
+    trace: Any | None = None
+    """The active OpenTelemetry span for adding custom attributes, events, etc."""
 
 
 _context_var: ContextVar[Context | None] = ContextVar("iii_context", default=None)

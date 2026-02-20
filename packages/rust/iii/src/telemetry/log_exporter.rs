@@ -81,7 +81,7 @@ impl LogExporter for EngineLogExporter {
 
             let body = record
                 .body()
-                .map(|b| anyvalue_to_json(b))
+                .map(anyvalue_to_json)
                 .unwrap_or_else(|| serde_json::json!({ "stringValue": "" }));
 
             let attributes: Vec<serde_json::Value> = record

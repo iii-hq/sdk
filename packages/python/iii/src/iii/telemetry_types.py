@@ -1,5 +1,6 @@
 """OTel configuration types for the III Python SDK."""
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 

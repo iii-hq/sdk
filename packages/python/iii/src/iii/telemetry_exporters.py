@@ -13,7 +13,9 @@ from collections import deque
 from typing import TYPE_CHECKING, Any, Sequence
 
 if TYPE_CHECKING:
-    pass
+    from opentelemetry.sdk._logs.export import LogExportResult
+    from opentelemetry.sdk.metrics.export import MetricExportResult
+    from opentelemetry.sdk.trace.export import SpanExportResult
 
 log = logging.getLogger("iii.telemetry_exporters")
 
@@ -124,7 +126,7 @@ def _attrs_to_otlp(attrs: Any) -> "list[dict[str, Any]]":
     return [{"key": k, "value": _attr_value(v)} for k, v in attrs.items()]
 
 
-def _serialize_spans(spans: Sequence) -> bytes:
+def _serialize_spans(spans: Sequence[Any]) -> bytes:
     """Serialize ReadableSpans to OTLP JSON with lowercase-hex trace/span IDs.
 
     Matches the format produced by the Node.js JsonTraceSerializer.serializeRequest().
@@ -135,7 +137,7 @@ def _serialize_spans(spans: Sequence) -> bytes:
     from collections import defaultdict
 
     resource_map: "dict[int, Any]" = {}
-    scope_map: "dict[int, dict[tuple, list]]" = defaultdict(lambda: defaultdict(list))
+    scope_map: dict[int, dict[tuple[str, str], list[Any]]] = defaultdict(lambda: defaultdict(list))
 
     for span in spans:
         r_id = id(span.resource)
@@ -197,7 +199,7 @@ def _serialize_spans(spans: Sequence) -> bytes:
     return json.dumps({"resourceSpans": resource_spans}).encode()
 
 
-def _serialize_logs(batch: Sequence) -> bytes:
+def _serialize_logs(batch: Sequence[Any]) -> bytes:
     """Serialize log records to OTLP JSON with lowercase-hex trace/span IDs.
 
     Matches the format produced by the Node.js JsonLogsSerializer.serializeRequest().
@@ -206,7 +208,7 @@ def _serialize_logs(batch: Sequence) -> bytes:
     from collections import defaultdict
 
     resource_map: "dict[int, Any]" = {}
-    scope_map: "dict[int, dict[tuple, list]]" = defaultdict(lambda: defaultdict(list))
+    scope_map: dict[int, dict[tuple[str, str], list[Any]]] = defaultdict(lambda: defaultdict(list))
 
     for record in batch:
         resource = getattr(record, "resource", None)
@@ -266,7 +268,7 @@ class EngineSpanExporter:
     def __init__(self, connection: SharedEngineConnection) -> None:
         self._connection = connection
 
-    def export(self, spans: Sequence) -> "SpanExportResult":
+    def export(self, spans: Sequence[Any]) -> SpanExportResult:
         from opentelemetry.sdk.trace.export import SpanExportResult
 
         try:
@@ -290,7 +292,7 @@ class EngineLogExporter:
     def __init__(self, connection: SharedEngineConnection) -> None:
         self._connection = connection
 
-    def export(self, batch: Sequence) -> "LogExportResult":
+    def export(self, batch: Sequence[Any]) -> LogExportResult:
         from opentelemetry.sdk._logs.export import LogExportResult
 
         try:
@@ -432,15 +434,15 @@ class EngineMetricsExporter:
     def __init__(self, connection: SharedEngineConnection) -> None:
         self._connection = connection
         # Required by PeriodicExportingMetricReader
-        self._preferred_temporality = {}
-        self._preferred_aggregation = {}
+        self._preferred_temporality: dict[Any, Any] = {}
+        self._preferred_aggregation: dict[Any, Any] = {}
 
     def export(
         self,
         metrics_data: Any,
         timeout_millis: float = 10_000,
         **kwargs: Any,
-    ) -> "MetricExportResult":
+    ) -> MetricExportResult:
         from opentelemetry.sdk.metrics.export import MetricExportResult
 
         try:

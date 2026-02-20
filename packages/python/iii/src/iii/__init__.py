@@ -26,9 +26,9 @@ from .stream import (
     UpdateRemove,
     UpdateSet,
 )
-from .types import ApiRequest, ApiResponse, FunctionsAvailableCallback, RemoteFunctionHandler
 from .telemetry import get_meter, get_tracer, init_otel, is_initialized, shutdown_otel
 from .telemetry_types import OtelConfig
+from .types import ApiRequest, ApiResponse, FunctionsAvailableCallback, RemoteFunctionHandler
 
 
 def configure_logging(level: int = logging.INFO, format: str | None = None) -> None:

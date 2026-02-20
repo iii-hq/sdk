@@ -68,8 +68,7 @@ class Logger:
             return False
         try:
             from opentelemetry import _logs
-            from opentelemetry._logs import SeverityNumber
-            from opentelemetry._logs import LogRecord
+            from opentelemetry._logs import LogRecord, SeverityNumber
 
             severity_text, severity_num = _SEVERITY_MAP[level]
             otel_logger = _logs.get_logger("iii.logger")

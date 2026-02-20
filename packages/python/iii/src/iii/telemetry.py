@@ -55,7 +55,7 @@ def init_otel(
 
     try:
         from opentelemetry import trace
-        from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
+        from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
     except ImportError as exc:
@@ -102,7 +102,7 @@ def init_otel(
 
     span_exporter = EngineSpanExporter(_connection)
     provider = TracerProvider(resource=resource)
-    provider.add_span_processor(BatchSpanProcessor(span_exporter))
+    provider.add_span_processor(BatchSpanProcessor(span_exporter))  # type: ignore[arg-type]
     trace.set_tracer_provider(provider)
     _tracer = trace.get_tracer("iii-python-sdk")
 
@@ -133,6 +133,7 @@ def _configure_meter_provider(
         from opentelemetry import metrics
         from opentelemetry.sdk.metrics import MeterProvider
         from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+
         from .telemetry_exporters import EngineMetricsExporter
     except ImportError:
         logging.getLogger("iii.telemetry").warning(
@@ -142,7 +143,7 @@ def _configure_meter_provider(
 
     metrics_exporter = EngineMetricsExporter(connection)
     metric_reader = PeriodicExportingMetricReader(
-        metrics_exporter,
+        metrics_exporter,  # type: ignore[arg-type]
         export_interval_millis=cfg.metrics_export_interval_ms,
     )
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
@@ -158,6 +159,7 @@ def _configure_log_provider(resource: Any, connection: Any) -> None:
         from opentelemetry import _logs
         from opentelemetry.sdk._logs import LoggerProvider as SdkLoggerProvider
         from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+
         from .telemetry_exporters import EngineLogExporter
     except ImportError:
         logging.getLogger("iii.telemetry").warning(
@@ -167,7 +169,7 @@ def _configure_log_provider(resource: Any, connection: Any) -> None:
 
     log_exporter = EngineLogExporter(connection)
     log_provider = SdkLoggerProvider(resource=resource)
-    log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+    log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))  # type: ignore[arg-type]
     _logs.set_logger_provider(log_provider)
     _log_provider = log_provider
 
@@ -201,7 +203,7 @@ def _enable_fetch_instrumentation() -> None:
     _original_opener_open = urllib.request.OpenerDirector.open
     original = _original_opener_open
 
-    def _patched_open(self: Any, fullurl: Any, data: Any = None, timeout: Any = socket._GLOBAL_DEFAULT_TIMEOUT) -> Any:
+    def _patched_open(self: Any, fullurl: Any, data: Any = None, timeout: Any = socket.getdefaulttimeout()) -> Any:
         tracer = get_tracer()
         if tracer is None:
             return original(self, fullurl, data, timeout)
@@ -278,7 +280,7 @@ def _enable_fetch_instrumentation() -> None:
                 span.record_exception(exc)
                 raise
 
-    urllib.request.OpenerDirector.open = _patched_open
+    urllib.request.OpenerDirector.open = _patched_open  # type: ignore[method-assign]
     _fetch_patched = True
 
 
@@ -302,7 +304,7 @@ def _reset_state() -> None:
         try:
             import urllib.request
             if _original_opener_open is not None:
-                urllib.request.OpenerDirector.open = _original_opener_open
+                urllib.request.OpenerDirector.open = _original_opener_open  # type: ignore[method-assign]
         except Exception:
             pass
         _fetch_patched = False

@@ -52,7 +52,9 @@ pub async fn execute_traced_request(
     let method = request.method().as_str().to_uppercase();
 
     let host = url.host_str().map(String::from);
-    let scheme = Some(url.scheme()).filter(|s| !s.is_empty()).map(String::from);
+    let scheme = Some(url.scheme())
+        .filter(|s| !s.is_empty())
+        .map(String::from);
     let path = Some(url.path()).filter(|p| !p.is_empty()).map(String::from);
     let port = url.port();
     let query = url.query().map(String::from);
@@ -110,10 +112,8 @@ pub async fn execute_traced_request(
     // Capture request body size
     if let Some(body) = request.body() {
         if let Some(bytes) = body.as_bytes() {
-            cx.span().set_attribute(KeyValue::new(
-                "http.request.body.size",
-                bytes.len() as i64,
-            ));
+            cx.span()
+                .set_attribute(KeyValue::new("http.request.body.size", bytes.len() as i64));
         }
     }
 

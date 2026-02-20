@@ -7,7 +7,7 @@
 
 use opentelemetry::logs::AnyValue;
 use opentelemetry::{Array, KeyValue, Value};
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Convert a SystemTime to nanoseconds-since-epoch as a string.
@@ -40,9 +40,10 @@ pub fn attr_value_to_json(v: &Value) -> JsonValue {
                 Array::Bool(vs) => vs.iter().map(|v| json!({ "boolValue": v })).collect(),
                 Array::I64(vs) => vs.iter().map(|v| json!({ "intValue": v })).collect(),
                 Array::F64(vs) => vs.iter().map(|v| json!({ "doubleValue": v })).collect(),
-                Array::String(vs) => {
-                    vs.iter().map(|v| json!({ "stringValue": v.as_str() })).collect()
-                }
+                Array::String(vs) => vs
+                    .iter()
+                    .map(|v| json!({ "stringValue": v.as_str() }))
+                    .collect(),
                 _ => vec![],
             };
             json!({ "arrayValue": { "values": values } })

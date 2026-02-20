@@ -75,7 +75,11 @@ impl Streams {
         let key_str = key.into();
         let parts: Vec<&str> = key_str.splitn(3, "::").collect();
         let (stream_name, group_id, item_id) = match parts.len() {
-            3 => (parts[0].to_string(), parts[1].to_string(), parts[2].to_string()),
+            3 => (
+                parts[0].to_string(),
+                parts[1].to_string(),
+                parts[2].to_string(),
+            ),
             2 => (parts[0].to_string(), parts[1].to_string(), String::new()),
             _ => (key_str, String::new(), String::new()),
         };

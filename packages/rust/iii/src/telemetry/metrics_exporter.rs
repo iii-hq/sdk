@@ -8,7 +8,7 @@ use opentelemetry_sdk::metrics::data::{
     AggregatedMetrics, Gauge, Histogram, Metric, MetricData, ResourceMetrics, ScopeMetrics, Sum,
 };
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use std::fmt;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -41,7 +41,8 @@ fn time_nanos(t: SystemTime) -> String {
 }
 
 fn opt_time_nanos(t: Option<SystemTime>) -> String {
-    t.map(system_time_to_nanos_string).unwrap_or_else(|| "0".to_string())
+    t.map(system_time_to_nanos_string)
+        .unwrap_or_else(|| "0".to_string())
 }
 
 fn serialize_sum_f64(metric: &Metric, sum: &Sum<f64>) -> JsonValue {
@@ -252,7 +253,9 @@ fn temporality_value(temporality: Temporality) -> u32 {
     }
 }
 
-fn serialize_scope_metrics(scope_metrics: impl Iterator<Item = impl std::borrow::Borrow<ScopeMetrics>>) -> Vec<JsonValue> {
+fn serialize_scope_metrics(
+    scope_metrics: impl Iterator<Item = impl std::borrow::Borrow<ScopeMetrics>>,
+) -> Vec<JsonValue> {
     scope_metrics
         .map(|sm| {
             let sm = sm.borrow();

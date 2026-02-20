@@ -9,7 +9,7 @@ import random
 import uuid
 from dataclasses import dataclass
 from importlib.metadata import version
-from typing import Any, Awaitable, Callable, Literal, cast
+from typing import Any, Awaitable, Callable, Literal
 
 import websockets
 from websockets.asyncio.client import ClientConnection
@@ -114,7 +114,7 @@ class III:
         """Connect to the WebSocket server."""
         self._running = True
         try:
-            from .telemetry import init_otel, attach_event_loop
+            from .telemetry import attach_event_loop, init_otel
             loop = asyncio.get_running_loop()
             init_otel(loop=loop)
             attach_event_loop(loop)
@@ -315,7 +315,8 @@ class III:
     def _inject_traceparent(self) -> str | None:
         """Return the current OTel span context as a W3C traceparent string, or None."""
         try:
-            from opentelemetry import context as otel_context, propagate
+            from opentelemetry import context as otel_context
+            from opentelemetry import propagate
             carrier: dict[str, str] = {}
             propagate.inject(carrier, context=otel_context.get_current())
             return carrier.get("traceparent")
@@ -325,7 +326,8 @@ class III:
     def _inject_baggage(self) -> str | None:
         """Return the current OTel baggage as a W3C baggage header string, or None."""
         try:
-            from opentelemetry import context as otel_context, propagate
+            from opentelemetry import context as otel_context
+            from opentelemetry import propagate
             carrier: dict[str, str] = {}
             propagate.inject(carrier, context=otel_context.get_current())
             return carrier.get("baggage")
@@ -345,7 +347,8 @@ class III:
         inside the attached context so it reflects the handler's span.
         """
         try:
-            from opentelemetry import context as otel_context, propagate
+            from opentelemetry import context as otel_context
+            from opentelemetry import propagate
             carrier: dict[str, str] = {}
             if traceparent:
                 carrier["traceparent"] = traceparent
@@ -502,7 +505,9 @@ class III:
 
         return Trigger(unregister)
 
-    def register_function(self, path: str, handler: RemoteFunctionHandler, description: str | None = None) -> FunctionRef:
+    def register_function(
+        self, path: str, handler: RemoteFunctionHandler, description: str | None = None
+    ) -> FunctionRef:
         if not path or not path.strip():
             raise ValueError("id is required")
 

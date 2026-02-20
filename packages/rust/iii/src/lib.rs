@@ -14,7 +14,7 @@ pub use error::IIIError;
 pub use iii::{
     FunctionInfo, FunctionsAvailableGuard, III, TriggerInfo, WorkerInfo, WorkerMetadata,
 };
-pub use logger::{Logger, LoggerInvoker};
+pub use logger::Logger;
 pub use protocol::{
     ErrorBody, FunctionMessage, Message, RegisterFunctionMessage, RegisterServiceMessage,
     RegisterTriggerMessage, RegisterTriggerTypeMessage,
@@ -33,7 +33,9 @@ pub use telemetry::{
         get_all_baggage, get_baggage_entry, inject_baggage, inject_traceparent,
         remove_baggage_entry, set_baggage_entry,
     },
-    flush_otel, get_meter, get_tracer, init_otel, is_initialized, shutdown_otel,
+    flush_otel, get_meter, get_tracer,
+    http_instrumentation::execute_traced_request,
+    init_otel, is_initialized, shutdown_otel,
     types::OtelConfig,
     types::ReconnectionConfig,
     with_span,

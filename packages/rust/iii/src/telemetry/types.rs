@@ -70,6 +70,11 @@ pub struct OtelConfig {
     pub channel_capacity: Option<usize>,
     /// Whether to enable the log exporter (default: true)
     pub logs_enabled: Option<bool>,
+    /// Whether to auto-instrument outgoing HTTP calls.
+    /// When `Some(true)` (default), `execute_traced_request()` can be used to
+    /// create CLIENT spans for reqwest requests. Set `Some(false)` to opt out.
+    /// `None` is treated as `true`.
+    pub fetch_instrumentation_enabled: Option<bool>,
 }
 
 #[cfg(test)]
@@ -95,6 +100,18 @@ mod tests {
         assert!(config.engine_ws_url.is_none());
         assert!(config.metrics_enabled.is_none());
         assert!(config.reconnection_config.is_none());
+    }
+
+    #[test]
+    fn test_otel_config_has_fetch_instrumentation_enabled() {
+        let config = OtelConfig::default();
+        assert!(config.fetch_instrumentation_enabled.is_none());
+
+        let config_disabled = OtelConfig {
+            fetch_instrumentation_enabled: Some(false),
+            ..Default::default()
+        };
+        assert_eq!(config_disabled.fetch_instrumentation_enabled, Some(false));
     }
 
     #[test]

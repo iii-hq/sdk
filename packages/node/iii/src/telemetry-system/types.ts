@@ -65,6 +65,8 @@ export interface OtelConfig {
   metricsEnabled?: boolean
   /** Metrics export interval in milliseconds. Defaults to 60000 (60 seconds). */
   metricsExportIntervalMs?: number
+  /** Whether to auto-instrument globalThis.fetch calls. Defaults to true. Works on Node.js, Bun, and Deno. Set to false to disable. */
+  fetchInstrumentationEnabled?: boolean
   /** Optional reconnection configuration for the WebSocket connection. */
   reconnectionConfig?: Partial<ReconnectionConfig>
 }
@@ -77,6 +79,7 @@ export const DEFAULT_OTEL_CONFIG = {
   engineWsUrl: 'ws://localhost:49134',
   metricsEnabled: true,
   metricsExportIntervalMs: 60000,
+  fetchInstrumentationEnabled: true,
 } as const satisfies Partial<OtelConfig>
 
 /** Parse a boolean environment variable, recognizing 'false', '0', 'no', 'off' as false. */

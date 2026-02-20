@@ -10,6 +10,7 @@ class MessageType(str, Enum):
     """Message types for iii communication."""
 
     REGISTER_FUNCTION = "registerfunction"
+    UNREGISTER_FUNCTION = "unregisterfunction"
     REGISTER_SERVICE = "registerservice"
     INVOKE_FUNCTION = "invokefunction"
     INVOCATION_RESULT = "invocationresult"
@@ -18,6 +19,7 @@ class MessageType(str, Enum):
     UNREGISTER_TRIGGER = "unregistertrigger"
     UNREGISTER_TRIGGER_TYPE = "unregistertriggertype"
     TRIGGER_REGISTRATION_RESULT = "triggerregistrationresult"
+    WORKER_REGISTERED = "workerregistered"
 
 
 class RegisterTriggerTypeMessage(BaseModel):
@@ -40,14 +42,14 @@ class UnregisterTriggerMessage(BaseModel):
 
     id: str
     message_type: MessageType = Field(default=MessageType.UNREGISTER_TRIGGER, alias="type")
-    type: str | None = Field(default=None, alias="trigger_type")
+    trigger_type: str | None = Field(default=None, alias="trigger_type")
 
 
 class TriggerRegistrationResultMessage(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
-    type: str = Field(alias="trigger_type")
+    trigger_type: str = Field(alias="trigger_type")
     function_id: str = Field()
     result: Any = None
     error: Any = None
@@ -58,7 +60,7 @@ class RegisterTriggerMessage(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
-    type: str = Field(alias="trigger_type")
+    trigger_type: str = Field(alias="trigger_type")
     function_id: str = Field()
     config: Any
     message_type: MessageType = Field(default=MessageType.REGISTER_TRIGGER, alias="type")
@@ -101,6 +103,8 @@ class InvokeFunctionMessage(BaseModel):
     function_id: str = Field()
     data: Any
     invocation_id: str | None = Field(default=None)
+    traceparent: str | None = Field(default=None)
+    baggage: str | None = Field(default=None)
     message_type: MessageType = Field(default=MessageType.INVOKE_FUNCTION, alias="type")
 
 
@@ -111,7 +115,23 @@ class InvocationResultMessage(BaseModel):
     function_id: str = Field()
     result: Any = None
     error: Any = None
+    traceparent: str | None = Field(default=None)
+    baggage: str | None = Field(default=None)
     message_type: MessageType = Field(default=MessageType.INVOCATION_RESULT, alias="type")
+
+
+class WorkerRegisteredMessage(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    worker_id: str = Field()
+    message_type: MessageType = Field(default=MessageType.WORKER_REGISTERED, alias="type")
+
+
+class UnregisterFunctionMessage(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    message_type: MessageType = Field(default=MessageType.UNREGISTER_FUNCTION, alias="type")
 
 
 class FunctionInfo(BaseModel):
@@ -145,6 +165,7 @@ class WorkerInfo(BaseModel):
 
 IIIMessage = (
     RegisterFunctionMessage
+    | UnregisterFunctionMessage
     | InvokeFunctionMessage
     | InvocationResultMessage
     | RegisterServiceMessage
@@ -153,4 +174,5 @@ IIIMessage = (
     | UnregisterTriggerMessage
     | UnregisterTriggerTypeMessage
     | TriggerRegistrationResultMessage
+    | WorkerRegisteredMessage
 )

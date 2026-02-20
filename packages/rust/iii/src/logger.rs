@@ -1,62 +1,93 @@
-use std::sync::Arc;
+use serde_json::Value;
 
-use serde_json::{Value, json};
-
-pub type LoggerInvoker = Arc<dyn Fn(&str, Value) + Send + Sync>;
+#[cfg(feature = "otel")]
+use opentelemetry::logs::{LogRecord as _, Logger as _, LoggerProvider as _, Severity};
 
 #[derive(Clone, Default)]
 pub struct Logger {
-    invoker: Option<LoggerInvoker>,
-    trace_id: String,
     function_name: String,
 }
 
 impl Logger {
-    pub fn new(
-        invoker: Option<LoggerInvoker>,
-        trace_id: Option<String>,
-        function_name: Option<String>,
-    ) -> Self {
+    pub fn new(function_name: Option<String>) -> Self {
         Self {
-            invoker,
-            trace_id: trace_id.unwrap_or_default(),
             function_name: function_name.unwrap_or_default(),
         }
     }
 
-    fn build_params(&self, message: &str, data: Option<Value>) -> Value {
-        json!({
-            "message": message,
-            "trace_id": self.trace_id,
-            "function_name": self.function_name,
-            "data": data,
-        })
+    /// Emit a LogRecord via the OTel LoggerProvider with trace context from the active span.
+    /// Returns `true` if the log was emitted via OTel, `false` otherwise.
+    #[cfg(feature = "otel")]
+    fn emit_otel(&self, message: &str, severity: Severity, data: Option<&Value>) -> bool {
+        let Some(provider) = crate::telemetry::get_logger_provider() else {
+            return false;
+        };
+
+        let logger = provider.logger("iii-rust-sdk");
+        let mut record = logger.create_log_record();
+        let now = std::time::SystemTime::now();
+        record.set_timestamp(now);
+        record.set_observed_timestamp(now);
+        record.set_severity_number(severity);
+        record.set_body(message.to_string().into());
+
+        if !self.function_name.is_empty() {
+            record.add_attribute("function_name", self.function_name.clone());
+        }
+        if let Some(d) = data {
+            record.add_attribute("data", d.to_string());
+        }
+
+        // Attach trace context from the active OTel span
+        {
+            use opentelemetry::trace::TraceContextExt;
+            let cx = opentelemetry::Context::current();
+            let span_ctx = cx.span().span_context().clone();
+            if span_ctx.is_valid() {
+                record.set_trace_context(
+                    span_ctx.trace_id(),
+                    span_ctx.span_id(),
+                    Some(span_ctx.trace_flags()),
+                );
+            }
+        }
+
+        logger.emit(record);
+        true
     }
 
+    #[cfg_attr(not(feature = "otel"), allow(unused_variables))]
     pub fn info(&self, message: &str, data: Option<Value>) {
-        if let Some(invoker) = &self.invoker {
-            invoker("logger.info", self.build_params(message, data));
+        #[cfg(feature = "otel")]
+        if self.emit_otel(message, Severity::Info, data.as_ref()) {
+            return;
         }
         tracing::info!(function = %self.function_name, message = %message);
     }
 
+    #[cfg_attr(not(feature = "otel"), allow(unused_variables))]
     pub fn warn(&self, message: &str, data: Option<Value>) {
-        if let Some(invoker) = &self.invoker {
-            invoker("logger.warn", self.build_params(message, data));
+        #[cfg(feature = "otel")]
+        if self.emit_otel(message, Severity::Warn, data.as_ref()) {
+            return;
         }
         tracing::warn!(function = %self.function_name, message = %message);
     }
 
+    #[cfg_attr(not(feature = "otel"), allow(unused_variables))]
     pub fn error(&self, message: &str, data: Option<Value>) {
-        if let Some(invoker) = &self.invoker {
-            invoker("logger.error", self.build_params(message, data));
+        #[cfg(feature = "otel")]
+        if self.emit_otel(message, Severity::Error, data.as_ref()) {
+            return;
         }
         tracing::error!(function = %self.function_name, message = %message);
     }
 
+    #[cfg_attr(not(feature = "otel"), allow(unused_variables))]
     pub fn debug(&self, message: &str, data: Option<Value>) {
-        if let Some(invoker) = &self.invoker {
-            invoker("logger.debug", self.build_params(message, data));
+        #[cfg(feature = "otel")]
+        if self.emit_otel(message, Severity::Debug, data.as_ref()) {
+            return;
         }
         tracing::debug!(function = %self.function_name, message = %message);
     }
@@ -64,41 +95,17 @@ impl Logger {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-
     use super::*;
 
     #[test]
-    fn logger_invokes_with_expected_payload() {
-        let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::new(Mutex::new(Vec::new()));
-        let calls_ref = calls.clone();
+    fn logger_uses_function_name() {
+        let logger = Logger::new(Some("my-function".to_string()));
+        assert_eq!(logger.function_name, "my-function");
+    }
 
-        let invoker: LoggerInvoker = Arc::new(move |path, params| {
-            calls_ref.lock().unwrap().push((path.to_string(), params));
-        });
-
-        let logger = Logger::new(
-            Some(invoker),
-            Some("trace-1".to_string()),
-            Some("function-a".to_string()),
-        );
-
-        logger.info("hello", Some(json!({ "key": "value" })));
-        logger.warn("warn", None);
-        logger.error("oops", Some(json!(123)));
-
-        let calls = calls.lock().unwrap();
-        assert_eq!(calls.len(), 3);
-        assert_eq!(calls[0].0, "logger.info");
-        assert_eq!(calls[1].0, "logger.warn");
-        assert_eq!(calls[2].0, "logger.error");
-
-        assert_eq!(calls[0].1["message"], "hello");
-        assert_eq!(calls[0].1["trace_id"], "trace-1");
-        assert_eq!(calls[0].1["function_name"], "function-a");
-        assert_eq!(calls[0].1["data"]["key"], "value");
-
-        assert!(calls[1].1["data"].is_null());
-        assert_eq!(calls[2].1["data"], 123);
+    #[test]
+    fn logger_default_function_name() {
+        let logger = Logger::new(None);
+        assert_eq!(logger.function_name, "");
     }
 }

@@ -190,7 +190,7 @@ class Sdk implements ISdk {
           const parentContext = extractContext(traceparent, baggage)
 
           return context.with(parentContext, () =>
-            withSpan(`invoke ${message.id}`, { kind: SpanKind.SERVER }, async span => {
+            withSpan(`call ${message.id}`, { kind: SpanKind.SERVER }, async span => {
               const traceId = currentTraceId() ?? crypto.randomUUID()
               const spanId = currentSpanId()
               const logger = new Logger(traceId, message.id, spanId)

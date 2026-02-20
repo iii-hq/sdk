@@ -3,7 +3,7 @@
 import logging
 
 from .context import Context, get_context, with_context
-from .iii import III, InitOptions
+from .iii import III, ConnectionStateCallback, FunctionRef, IIIConnectionState, InitOptions, ReconnectionConfig
 from .iii_types import FunctionInfo, WorkerInfo, WorkerStatus
 from .logger import Logger
 from .stream import (
@@ -26,6 +26,8 @@ from .stream import (
     UpdateRemove,
     UpdateSet,
 )
+from .telemetry import get_meter, get_tracer, init_otel, is_initialized, shutdown_otel
+from .telemetry_types import OtelConfig
 from .types import ApiRequest, ApiResponse, FunctionsAvailableCallback, RemoteFunctionHandler
 
 
@@ -47,6 +49,10 @@ __all__ = [
     # Core
     "III",
     "InitOptions",
+    "ReconnectionConfig",
+    "IIIConnectionState",
+    "ConnectionStateCallback",
+    "FunctionRef",
     "Logger",
     "Context",
     "get_context",
@@ -80,6 +86,13 @@ __all__ = [
     # Callbacks
     "FunctionsAvailableCallback",
     "RemoteFunctionHandler",
+    # Telemetry
+    "OtelConfig",
+    "init_otel",
+    "shutdown_otel",
+    "get_tracer",
+    "get_meter",
+    "is_initialized",
     # Utility
     "configure_logging",
 ]

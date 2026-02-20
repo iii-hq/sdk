@@ -1,69 +1,92 @@
 """Logger implementation for the III SDK."""
+from __future__ import annotations
 
 import logging
-from typing import Any, Callable
-
-from pydantic import BaseModel, ConfigDict, Field
+import time
+from typing import Any
 
 log = logging.getLogger("iii.logger")
 
-
-class LoggerParams(BaseModel):
-    """Parameters for logger invocation."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    message: str
-    trace_id: str = Field(default="", serialization_alias="trace_id")
-    function_name: str = Field(default="", serialization_alias="function_name")
-    data: Any = None
+_SEVERITY_MAP = {
+    "info": ("INFO", 9),    # SeverityNumber.INFO
+    "warn": ("WARN", 13),   # SeverityNumber.WARN
+    "error": ("ERROR", 17), # SeverityNumber.ERROR
+    "debug": ("DEBUG", 5),  # SeverityNumber.DEBUG
+}
 
 
-LoggerInvoker = Callable[[str, dict[str, Any]], None]
+def is_initialized() -> bool:
+    """Return True if OTel has been initialized (importable without circular dep)."""
+    try:
+        from .telemetry import is_initialized as _is_init
+        return _is_init()
+    except ImportError:
+        return False
 
 
 class Logger:
-    """Logger that sends log messages through the iii engine."""
+    """Logger that emits OTel LogRecords when OTel is active, otherwise
+    falls back to Python logging."""
 
-    def __init__(
-        self,
-        invoker: LoggerInvoker | None = None,
-        trace_id: str | None = None,
-        function_name: str | None = None,
-    ) -> None:
-        self._invoker = invoker
-        self._trace_id = trace_id or ""
+    def __init__(self, function_name: str | None = None) -> None:
         self._function_name = function_name or ""
 
-    def _build_params(self, message: str, data: Any = None) -> dict[str, Any]:
-        """Build logger params dict."""
-        return {
-            "message": message,
-            "trace_id": self._trace_id,
-            "function_name": self._function_name,
-            "data": data,
+    def _emit_otel(self, level: str, message: str, data: Any = None) -> bool:
+        """Emit an OTel LogRecord. Returns True if emitted, False if OTel not active."""
+        if not is_initialized():
+            return False
+        try:
+            from opentelemetry import _logs, trace
+            from opentelemetry._logs import LogRecord, SeverityNumber
+
+            severity_text, severity_num = _SEVERITY_MAP[level]
+            otel_logger = _logs.get_logger("iii.logger")
+            attrs: dict[str, Any] = {"function_name": self._function_name}
+            if data is not None:
+                attrs["data"] = str(data)
+
+            span_ctx = trace.get_current_span().get_span_context()
+            trace_id = span_ctx.trace_id if span_ctx.is_valid else 0
+            span_id = span_ctx.span_id if span_ctx.is_valid else 0
+            trace_flags = span_ctx.trace_flags if span_ctx.is_valid else trace.TraceFlags(0)
+
+            record = LogRecord(
+                timestamp=time.time_ns(),
+                observed_timestamp=time.time_ns(),
+                severity_text=severity_text,
+                severity_number=SeverityNumber(severity_num),
+                body=message,
+                attributes=attrs,
+                trace_id=trace_id,
+                span_id=span_id,
+                trace_flags=trace_flags,
+            )
+            otel_logger.emit(record)
+            return True
+        except Exception:
+            return False
+
+    def _emit(self, level: str, message: str, data: Any = None) -> None:
+        """Emit a log message via OTel, or Python logging as fallback."""
+        if self._emit_otel(level, message, data):
+            return
+        _LOG_METHODS = {
+            "info": log.info,
+            "warn": log.warning,
+            "error": log.error,
+            "debug": log.debug,
         }
+        log_fn = _LOG_METHODS.get(level, log.info)
+        log_fn("[%s] %s", self._function_name, message, extra={"data": data})
 
     def info(self, message: str, data: Any = None) -> None:
-        """Log an info message."""
-        if self._invoker:
-            self._invoker("engine::log::info", self._build_params(message, data))
-        log.info(f"[{self._function_name}] {message}", extra={"data": data})
+        self._emit("info", message, data)
 
     def warn(self, message: str, data: Any = None) -> None:
-        """Log a warning message."""
-        if self._invoker:
-            self._invoker("engine::log::warn", self._build_params(message, data))
-        log.warning(f"[{self._function_name}] {message}", extra={"data": data})
+        self._emit("warn", message, data)
 
     def error(self, message: str, data: Any = None) -> None:
-        """Log an error message."""
-        if self._invoker:
-            self._invoker("engine::log::error", self._build_params(message, data))
-        log.error(f"[{self._function_name}] {message}", extra={"data": data})
+        self._emit("error", message, data)
 
     def debug(self, message: str, data: Any = None) -> None:
-        """Log a debug message."""
-        if self._invoker:
-            self._invoker("engine::log::debug", self._build_params(message, data))
-        log.debug(f"[{self._function_name}] {message}", extra={"data": data})
+        self._emit("debug", message, data)

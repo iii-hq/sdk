@@ -20,7 +20,7 @@ import {
   type Tracer,
   type Meter,
 } from '@opentelemetry/api'
-import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics'
 import {
   CompositePropagator,
@@ -29,7 +29,7 @@ import {
 } from '@opentelemetry/core'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
 import { registerInstrumentations } from '@opentelemetry/instrumentation'
-import { LoggerProvider, SimpleLogRecordProcessor } from '@opentelemetry/sdk-logs'
+import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs'
 import { type Logger, SeverityNumber } from '@opentelemetry/api-logs'
 
 import {
@@ -43,6 +43,7 @@ import {
 import { SharedEngineConnection } from './connection'
 import { EngineSpanExporter, EngineMetricsExporter, EngineLogExporter } from './exporters'
 import { extractTraceparent } from './context'
+import { patchGlobalFetch, unpatchGlobalFetch } from './fetch-instrumentation'
 
 // Re-export everything from submodules
 export * from './types'
@@ -71,11 +72,6 @@ export function initOtel(config: OtelConfig = {}): void {
       '[OTel] OpenTelemetry is disabled. To enable, remove OTEL_ENABLED=false or set enabled: true in config.',
     )
     return
-  }
-
-  // Register any provided instrumentations
-  if (config.instrumentations?.length) {
-    registerInstrumentations({ instrumentations: config.instrumentations })
   }
 
   // Configure service identity
@@ -107,7 +103,7 @@ export function initOtel(config: OtelConfig = {}): void {
   const spanExporter = new EngineSpanExporter(sharedConnection)
   tracerProvider = new NodeTracerProvider({
     resource,
-    spanProcessors: [new SimpleSpanProcessor(spanExporter)],
+    spanProcessors: [new BatchSpanProcessor(spanExporter)],
   })
 
   // Register W3C Trace Context and Baggage propagators
@@ -148,10 +144,30 @@ export function initOtel(config: OtelConfig = {}): void {
     console.debug(`[OTel] Metrics initialized: interval=${exportIntervalMs}ms`)
   }
 
+  // Register user-provided instrumentations AFTER providers are set up
+  const instrumentations = [...(config.instrumentations ?? [])]
+  if (instrumentations.length > 0) {
+    registerInstrumentations({
+      instrumentations,
+      tracerProvider,
+      meterProvider: meterProvider ?? undefined,
+    })
+    console.debug(`[OTel] Instrumentations registered: ${instrumentations.length} total`)
+  }
+
+  // Patch global fetch for runtime-agnostic HTTP client tracing (works on Bun, Node.js, Deno)
+  const fetchEnabled =
+    config.fetchInstrumentationEnabled ?? DEFAULT_OTEL_CONFIG.fetchInstrumentationEnabled
+
+  if (fetchEnabled) {
+    patchGlobalFetch(tracer)
+    console.debug('[OTel] Global fetch instrumentation enabled')
+  }
+
   // Initialize logs (always enabled when OTEL is enabled)
   const logExporter = new EngineLogExporter(sharedConnection)
   loggerProvider = new LoggerProvider({ resource })
-  loggerProvider.addLogRecordProcessor(new SimpleLogRecordProcessor(logExporter))
+  loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(logExporter))
   logger = loggerProvider.getLogger(serviceName)
 
   console.debug('[OTel] Logs initialized')
@@ -162,16 +178,19 @@ export function initOtel(config: OtelConfig = {}): void {
  */
 export async function shutdownOtel(): Promise<void> {
   if (tracerProvider) {
+    await tracerProvider.forceFlush()
     await tracerProvider.shutdown()
     tracerProvider = null
   }
 
   if (meterProvider) {
+    await meterProvider.forceFlush()
     await meterProvider.shutdown()
     meterProvider = null
   }
 
   if (loggerProvider) {
+    await loggerProvider.forceFlush()
     await loggerProvider.shutdown()
     loggerProvider = null
   }
@@ -180,6 +199,8 @@ export async function shutdownOtel(): Promise<void> {
     await sharedConnection.shutdown()
     sharedConnection = null
   }
+
+  unpatchGlobalFetch()
 
   tracer = null
   meter = null

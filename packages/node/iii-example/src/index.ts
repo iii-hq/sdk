@@ -2,10 +2,11 @@ import { useApi } from './hooks'
 import { state } from './state'
 import { streams } from './stream'
 import type { Todo } from './types'
+import './http-example'
 
 useApi(
   {
-    api_path: 'todo',
+    api_path: '/todo',
     http_method: 'POST',
     description: 'Create a new todo',
     metadata: { tags: ['todo'] },

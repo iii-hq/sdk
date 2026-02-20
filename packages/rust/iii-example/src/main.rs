@@ -1,20 +1,19 @@
 use std::time::Duration;
 
-use iii_sdk::{III, Streams, UpdateBuilder, UpdateOp};
-use serde::{Deserialize, Serialize};
+use iii_sdk::{III, OtelConfig, Streams, UpdateBuilder, UpdateOp};
 use serde_json::json;
 
-#[derive(Serialize, Deserialize, Debug)]
-struct KeyValueData {
-    key: String,
-    value: String,
-}
+mod http_example;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let iii_iii_url = std::env::var("REMOTE_III_URL").unwrap_or("ws://127.0.0.1:49134".into());
     let iii = III::new(&iii_iii_url);
+    iii.set_otel_config(OtelConfig::default());
     iii.connect().await?;
+
+    // Register HTTP fetch API handlers (GET & POST http-fetch with OTel instrumentation)
+    http_example::setup(&iii);
 
     // Create a Streams instance for atomic updates
     let streams = Streams::new(iii.clone());

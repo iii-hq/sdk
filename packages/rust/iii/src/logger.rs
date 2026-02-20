@@ -56,6 +56,7 @@ impl Logger {
         true
     }
 
+    #[cfg_attr(not(feature = "otel"), allow(unused_variables))]
     pub fn info(&self, message: &str, data: Option<Value>) {
         #[cfg(feature = "otel")]
         if self.emit_otel(message, Severity::Info, data.as_ref()) {
@@ -64,6 +65,7 @@ impl Logger {
         tracing::info!(function = %self.function_name, message = %message);
     }
 
+    #[cfg_attr(not(feature = "otel"), allow(unused_variables))]
     pub fn warn(&self, message: &str, data: Option<Value>) {
         #[cfg(feature = "otel")]
         if self.emit_otel(message, Severity::Warn, data.as_ref()) {
@@ -72,6 +74,7 @@ impl Logger {
         tracing::warn!(function = %self.function_name, message = %message);
     }
 
+    #[cfg_attr(not(feature = "otel"), allow(unused_variables))]
     pub fn error(&self, message: &str, data: Option<Value>) {
         #[cfg(feature = "otel")]
         if self.emit_otel(message, Severity::Error, data.as_ref()) {
@@ -80,6 +83,7 @@ impl Logger {
         tracing::error!(function = %self.function_name, message = %message);
     }
 
+    #[cfg_attr(not(feature = "otel"), allow(unused_variables))]
     pub fn debug(&self, message: &str, data: Option<Value>) {
         #[cfg(feature = "otel")]
         if self.emit_otel(message, Severity::Debug, data.as_ref()) {

@@ -81,8 +81,8 @@ impl LogExporter for EngineLogExporter {
 
             let body = record
                 .body()
-                .map(|b| format!("{:?}", b))
-                .unwrap_or_default();
+                .map(|b| anyvalue_to_json(b))
+                .unwrap_or_else(|| serde_json::json!({ "stringValue": "" }));
 
             let attributes: Vec<serde_json::Value> = record
                 .attributes_iter()
@@ -99,7 +99,7 @@ impl LogExporter for EngineLogExporter {
                 "observedTimeUnixNano": observed_timestamp,
                 "severityNumber": severity_number,
                 "severityText": severity_text,
-                "body": { "stringValue": body },
+                "body": body,
                 "attributes": attributes,
             });
 

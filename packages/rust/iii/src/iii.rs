@@ -34,7 +34,7 @@ const SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
 use crate::{
     context::{Context, with_context},
     error::IIIError,
-    logger::{Logger, LoggerInvoker},
+    logger::Logger,
     protocol::{
         ErrorBody, Message, RegisterFunctionMessage, RegisterServiceMessage,
         RegisterTriggerMessage, RegisterTriggerTypeMessage, UnregisterTriggerMessage,
@@ -355,25 +355,15 @@ impl III {
         Fut: std::future::Future<Output = Result<Value, IIIError>> + Send + 'static,
     {
         let function_id = message.id.clone();
-        let iii = self.clone();
 
         let user_handler = Arc::new(move |input: Value| Box::pin(handler(input)));
 
         let wrapped_handler: RemoteFunctionHandler = Arc::new(move |input: Value| {
             let function_id = function_id.clone();
-            let iii = iii.clone();
             let user_handler = user_handler.clone();
 
             Box::pin(async move {
-                let invoker: LoggerInvoker = Arc::new(move |path, params| {
-                    let _ = iii.call_void(path, params);
-                });
-
-                let logger = Logger::new(
-                    Some(invoker),
-                    Some(Uuid::new_v4().to_string()),
-                    Some(function_id.clone()),
-                );
+                let logger = Logger::new(Some(function_id.clone()));
                 let context = Context { logger, span: None };
 
                 with_context(context, || user_handler(input)).await

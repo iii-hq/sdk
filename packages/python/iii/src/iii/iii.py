@@ -515,12 +515,7 @@ class III:
         self._send_if_connected(msg)
 
         async def wrapped(input_data: Any) -> Any:
-            trace_id = str(uuid.uuid4())
-            logger = Logger(
-                lambda fn, params: self.call_void(fn, params),
-                trace_id,
-                path,
-            )
+            logger = Logger(function_name=path)
             ctx = Context(logger=logger)
             return await with_context(lambda _: handler(input_data), ctx)
 

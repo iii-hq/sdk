@@ -6,7 +6,7 @@ pub fn setup(iii: &III) {
 
     // GET http-fetch — fetch a todo from JSONPlaceholder (demonstrates OTel fetch instrumentation)
     let get_client = client.clone();
-    iii.register_function("api::get::http-fetch", move |_input| {
+    iii.register_function("api::get::http::rust::fetch", move |_input| {
         let client = get_client.clone();
         async move {
             let ctx = get_context();
@@ -42,7 +42,7 @@ pub fn setup(iii: &III) {
 
     iii.register_trigger(
         "http",
-        "api::get::http-fetch",
+        "api::get::http::rust::fetch",
         json!({
             "api_path": "http-fetch",
             "http_method": "GET",
@@ -54,7 +54,7 @@ pub fn setup(iii: &III) {
 
     // POST http-fetch — post to httpbin (demonstrates request body size in OTel spans)
     let post_client = client.clone();
-    iii.register_function("api::post::http-fetch", move |input| {
+    iii.register_function("api::post::http::rust::fetch", move |input| {
         let client = post_client.clone();
         async move {
             let ctx = get_context();
@@ -102,7 +102,7 @@ pub fn setup(iii: &III) {
 
     iii.register_trigger(
         "http",
-        "api::post::http-fetch",
+        "api::post::http::rust::fetch",
         json!({
             "api_path": "http-fetch",
             "http_method": "POST",

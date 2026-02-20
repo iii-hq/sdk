@@ -3,25 +3,9 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Callable
-
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
 
 log = logging.getLogger("iii.logger")
-
-
-class LoggerParams(BaseModel):
-    """Parameters for logger invocation."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    message: str
-    trace_id: str = Field(default="", serialization_alias="trace_id")
-    function_name: str = Field(default="", serialization_alias="function_name")
-    data: Any = None
-
-
-LoggerInvoker = Callable[[str, dict[str, Any]], None]
 
 _SEVERITY_MAP = {
     "info": ("INFO", 9),    # SeverityNumber.INFO
@@ -42,41 +26,29 @@ def is_initialized() -> bool:
 
 class Logger:
     """Logger that emits OTel LogRecords when OTel is active, otherwise
-    sends log messages through the III engine via WebSocket function calls."""
+    falls back to Python logging."""
 
-    def __init__(
-        self,
-        invoker: LoggerInvoker | None = None,
-        trace_id: str | None = None,
-        function_name: str | None = None,
-    ) -> None:
-        self._invoker = invoker
-        self._trace_id = trace_id or ""
+    def __init__(self, function_name: str | None = None) -> None:
         self._function_name = function_name or ""
-
-    def _build_params(self, message: str, data: Any = None) -> dict[str, Any]:
-        return {
-            "message": message,
-            "trace_id": self._trace_id,
-            "function_name": self._function_name,
-            "data": data,
-        }
 
     def _emit_otel(self, level: str, message: str, data: Any = None) -> bool:
         """Emit an OTel LogRecord. Returns True if emitted, False if OTel not active."""
         if not is_initialized():
             return False
         try:
-            from opentelemetry import _logs
+            from opentelemetry import _logs, trace
             from opentelemetry._logs import LogRecord, SeverityNumber
 
             severity_text, severity_num = _SEVERITY_MAP[level]
             otel_logger = _logs.get_logger("iii.logger")
             attrs: dict[str, Any] = {"function_name": self._function_name}
-            if self._trace_id:
-                attrs["trace_id"] = self._trace_id
             if data is not None:
                 attrs["data"] = str(data)
+
+            span_ctx = trace.get_current_span().get_span_context()
+            trace_id = span_ctx.trace_id if span_ctx.is_valid else 0
+            span_id = span_ctx.span_id if span_ctx.is_valid else 0
+            trace_flags = span_ctx.trace_flags if span_ctx.is_valid else trace.TraceFlags(0)
 
             record = LogRecord(
                 timestamp=time.time_ns(),
@@ -85,6 +57,9 @@ class Logger:
                 severity_number=SeverityNumber(severity_num),
                 body=message,
                 attributes=attrs,
+                trace_id=trace_id,
+                span_id=span_id,
+                trace_flags=trace_flags,
             )
             otel_logger.emit(record)
             return True
@@ -92,18 +67,9 @@ class Logger:
             return False
 
     def _emit(self, level: str, message: str, data: Any = None) -> None:
-        """Emit a log message via OTel, WS invoker, or Python logging (fallback).
-
-        Priority: OTel first, then WS invoker, then Python logging.
-        Only ONE path fires per call to avoid double-emit.
-        """
+        """Emit a log message via OTel, or Python logging as fallback."""
         if self._emit_otel(level, message, data):
             return
-        if self._invoker:
-            engine_method = f"engine::log::{level}"
-            self._invoker(engine_method, self._build_params(message, data))
-            return
-        # Final fallback: Python logging
         _LOG_METHODS = {
             "info": log.info,
             "warn": log.warning,

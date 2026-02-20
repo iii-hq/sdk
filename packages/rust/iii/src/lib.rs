@@ -14,7 +14,7 @@ pub use error::IIIError;
 pub use iii::{
     FunctionInfo, FunctionsAvailableGuard, III, TriggerInfo, WorkerInfo, WorkerMetadata,
 };
-pub use logger::{Logger, LoggerInvoker};
+pub use logger::Logger;
 pub use protocol::{
     ErrorBody, FunctionMessage, Message, RegisterFunctionMessage, RegisterServiceMessage,
     RegisterTriggerMessage, RegisterTriggerTypeMessage,

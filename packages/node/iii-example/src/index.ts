@@ -2,6 +2,7 @@ import { useApi } from './hooks'
 import { state } from './state'
 import { streams } from './stream'
 import type { Todo } from './types'
+import './http-example'
 
 useApi(
   {

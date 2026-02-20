@@ -1,6 +1,8 @@
 """Tests for OTel-bridge behavior of Logger."""
+from unittest.mock import patch
+
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 
 @pytest.fixture(autouse=True)
@@ -30,9 +32,9 @@ def reset_otel():
 
 
 def _setup_in_memory_log_provider():
+    from opentelemetry import _logs
     from opentelemetry.sdk._logs import LoggerProvider as SdkLoggerProvider
     from opentelemetry.sdk._logs.export import InMemoryLogRecordExporter, SimpleLogRecordProcessor
-    from opentelemetry import _logs
 
     log_exporter = InMemoryLogRecordExporter()
     lp = SdkLoggerProvider()
@@ -43,14 +45,14 @@ def _setup_in_memory_log_provider():
 
 def test_logger_emits_otel_record_when_initialized():
     """Logger.info emits an OTel LogRecord with severity INFO when OTel is active."""
+    from iii.logger import Logger
     from iii.telemetry import init_otel
     from iii.telemetry_types import OtelConfig
-    from iii.logger import Logger
 
     log_exporter = _setup_in_memory_log_provider()
     init_otel(OtelConfig(enabled=True, logs_enabled=False))  # skip EngineLogExporter
 
-    logger = Logger(trace_id="t1", function_name="fn1")
+    logger = Logger(function_name="fn1")
     logger.info("hello world", {"key": "val"})
 
     records = log_exporter.get_finished_logs()
@@ -60,8 +62,9 @@ def test_logger_emits_otel_record_when_initialized():
 
 
 def test_logger_emits_warn_severity():
-    from iii.logger import Logger
     from opentelemetry._logs import SeverityNumber
+
+    from iii.logger import Logger
 
     log_exporter = _setup_in_memory_log_provider()
 
@@ -74,31 +77,45 @@ def test_logger_emits_warn_severity():
     assert records[0].log_record.severity_number == SeverityNumber.WARN
 
 
-def test_logger_falls_back_to_invoker_when_otel_not_initialized():
-    """Logger.info calls invoker with engine::log::info when OTel not initialized."""
+def test_logger_attaches_trace_context_from_active_span():
+    """Logger attaches trace_id and span_id from the active OTel span."""
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+
     from iii.logger import Logger
 
-    invoker = MagicMock()
-    logger = Logger(invoker=invoker, trace_id="t1", function_name="fn1")
-    logger.info("test message")
+    log_exporter = _setup_in_memory_log_provider()
 
-    invoker.assert_called_once_with("engine::log::info", {
-        "message": "test message",
-        "trace_id": "t1",
-        "function_name": "fn1",
-        "data": None,
-    })
-
-
-def test_logger_does_not_call_invoker_when_otel_initialized():
-    """Logger.info does NOT call engine::log::info when OTel is active."""
-    from iii.logger import Logger
-
-    _setup_in_memory_log_provider()
-    invoker = MagicMock()
+    tracer_provider = TracerProvider()
+    trace.set_tracer_provider(tracer_provider)
+    tracer = tracer_provider.get_tracer("test")
 
     with patch("iii.logger.is_initialized", return_value=True):
-        logger = Logger(invoker=invoker)
-        logger.info("otel message")
+        with tracer.start_as_current_span("test-span") as span:
+            logger = Logger(function_name="fn1")
+            logger.info("inside span")
 
-    invoker.assert_not_called()
+            span_ctx = span.get_span_context()
+
+    records = log_exporter.get_finished_logs()
+    assert len(records) == 1
+    lr = records[0].log_record
+    assert lr.trace_id == span_ctx.trace_id
+    assert lr.span_id == span_ctx.span_id
+
+
+def test_logger_no_trace_context_outside_span():
+    """Logger emits zero trace_id/span_id when no active span."""
+    from iii.logger import Logger
+
+    log_exporter = _setup_in_memory_log_provider()
+
+    with patch("iii.logger.is_initialized", return_value=True):
+        logger = Logger(function_name="fn1")
+        logger.info("outside span")
+
+    records = log_exporter.get_finished_logs()
+    assert len(records) == 1
+    lr = records[0].log_record
+    assert lr.trace_id == 0
+    assert lr.span_id == 0

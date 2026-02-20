@@ -8,9 +8,11 @@
 
 import { type Tracer, SpanKind, SpanStatusCode, context, propagation } from '@opentelemetry/api'
 
+const textEncoder = new TextEncoder()
+
 function getBodyByteSize(body: unknown): number | undefined {
   if (body == null) return undefined
-  if (typeof body === 'string') return new TextEncoder().encode(body).byteLength
+  if (typeof body === 'string') return textEncoder.encode(body).byteLength
   if (body instanceof ArrayBuffer) return body.byteLength
   if (ArrayBuffer.isView(body)) return body.byteLength
   if (body instanceof Blob) return body.size

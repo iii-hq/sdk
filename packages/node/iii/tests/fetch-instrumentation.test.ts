@@ -49,7 +49,7 @@ vi.mock('@opentelemetry/sdk-logs', () => ({
 
 // Mock span processor
 vi.mock('@opentelemetry/sdk-trace-base', () => ({
-  SimpleSpanProcessor: vi.fn().mockImplementation(() => ({})),
+  BatchSpanProcessor: vi.fn().mockImplementation(() => ({})),
 }))
 
 // Mock exporters

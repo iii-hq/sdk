@@ -13,11 +13,23 @@ ORIGINAL_OPENER_OPEN = urllib.request.OpenerDirector.open
 def cleanup():
     yield
     shutdown_otel()
-    # Force-reset the global OTel log provider so tests don't bleed state
+    # Reset all OTel global singletons so tests don't bleed state
     try:
         import opentelemetry._logs._internal as _li
         _li._LOGGER_PROVIDER = None
         _li._LOGGER_PROVIDER_SET_ONCE._done = False
+    except Exception:
+        pass
+    try:
+        import opentelemetry.trace._internal as _ti
+        _ti._TRACER_PROVIDER = None
+        _ti._TRACER_PROVIDER_SET_ONCE._done = False
+    except Exception:
+        pass
+    try:
+        import opentelemetry.metrics._internal as _mi
+        _mi._METER_PROVIDER = None
+        _mi._METER_PROVIDER_SET_ONCE._done = False
     except Exception:
         pass
     urllib.request.OpenerDirector.open = ORIGINAL_OPENER_OPEN
@@ -85,19 +97,19 @@ def test_telemetry_apis_exported_from_package():
 
 
 def test_init_configures_engine_span_exporter():
-    """init_otel wires a SimpleSpanProcessor(EngineSpanExporter) on the TracerProvider."""
+    """init_otel wires a BatchSpanProcessor(EngineSpanExporter) on the TracerProvider."""
     from opentelemetry import trace
     from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from iii.telemetry_exporters import EngineSpanExporter
 
     init_otel(OtelConfig(enabled=True))
     provider = trace.get_tracer_provider()
     assert isinstance(provider, TracerProvider)
     processors = provider._active_span_processor._span_processors
-    ssp = next((p for p in processors if isinstance(p, SimpleSpanProcessor)), None)
-    assert ssp is not None
-    assert isinstance(ssp.span_exporter, EngineSpanExporter)
+    bsp = next((p for p in processors if isinstance(p, BatchSpanProcessor)), None)
+    assert bsp is not None
+    assert isinstance(bsp.span_exporter, EngineSpanExporter)
 
 
 def test_init_configures_log_provider():

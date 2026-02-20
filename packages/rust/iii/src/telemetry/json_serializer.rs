@@ -86,7 +86,7 @@ pub fn anyvalue_to_json(v: &AnyValue) -> JsonValue {
         AnyValue::Int(i) => json!({ "intValue": i }),
         AnyValue::Double(f) => json!({ "doubleValue": f }),
         AnyValue::String(s) => json!({ "stringValue": s.as_str() }),
-        AnyValue::Bytes(bytes) => json!({ "bytesValue": base64_encode(bytes) }),
+        AnyValue::Bytes(bytes) => json!({ "bytesValue": bytes_to_hex_str(bytes) }),
         AnyValue::ListAny(list) => {
             let values: Vec<JsonValue> = list.iter().map(anyvalue_to_json).collect();
             json!({ "arrayValue": { "values": values } })
@@ -107,10 +107,9 @@ pub fn anyvalue_to_json(v: &AnyValue) -> JsonValue {
     }
 }
 
-/// Simple base64 encoding for bytes (no external dep needed for this).
-fn base64_encode(bytes: &[u8]) -> String {
+/// Hex-encode a byte slice (used for OTLP bytes values).
+fn bytes_to_hex_str(bytes: &[u8]) -> String {
     use std::fmt::Write;
-    // Use hex encoding for simplicity (matching bytes_to_hex pattern)
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes.iter() {
         let _ = write!(s, "{:02x}", b);

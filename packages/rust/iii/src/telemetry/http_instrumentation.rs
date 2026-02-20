@@ -148,6 +148,8 @@ pub async fn execute_traced_request(
                     .set_attribute(KeyValue::new("error.type", status.to_string()));
                 cx.span()
                     .set_status(opentelemetry::trace::Status::error(status.to_string()));
+            } else {
+                cx.span().set_status(opentelemetry::trace::Status::Ok);
             }
 
             cx.span().end();

@@ -9,7 +9,7 @@ class OtelConfig:
     """Configuration for OpenTelemetry initialization."""
 
     enabled: bool | None = None
-    """Enable OTel. Defaults to env OTEL_ENABLED ('true'/'1'/'yes'/'on') or False."""
+    """Enable OTel. Defaults to True. Set OTEL_ENABLED=false/0/no/off to disable."""
 
     service_name: str | None = None
     """Service name. Defaults to env OTEL_SERVICE_NAME or 'iii-python-sdk'."""

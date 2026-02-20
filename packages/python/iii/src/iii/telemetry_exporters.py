@@ -7,9 +7,10 @@ Metrics → binary WS frame: b"MTRC" + OTLP JSON bytes
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import random
-from collections import deque
+from collections import defaultdict, deque
 from typing import TYPE_CHECKING, Any, Sequence
 
 if TYPE_CHECKING:
@@ -62,13 +63,13 @@ class SharedEngineConnection:
             self._pre_start_buffer.append((prefix, payload))
             return
 
-        async def _try_put() -> None:
+        def _try_put() -> None:
             try:
                 self._queue.put_nowait((prefix, payload))  # type: ignore[union-attr]
             except asyncio.QueueFull:
                 log.warning("[OTel] Telemetry queue full, dropping message")
 
-        asyncio.run_coroutine_threadsafe(_try_put(), self._loop)
+        self._loop.call_soon_threadsafe(_try_put)
 
     async def _run(self) -> None:
         """Main reconnect loop — runs as an asyncio Task."""
@@ -133,9 +134,6 @@ def _serialize_spans(spans: Sequence[Any]) -> bytes:
     The III Engine stores IDs as lowercase hex (matching Rust's Display impl), so
     we must NOT use protobuf MessageToJson which base64-encodes bytes fields.
     """
-    import json
-    from collections import defaultdict
-
     resource_map: "dict[int, Any]" = {}
     scope_map: dict[int, dict[tuple[str, str], list[Any]]] = defaultdict(lambda: defaultdict(list))
 
@@ -204,9 +202,6 @@ def _serialize_logs(batch: Sequence[Any]) -> bytes:
 
     Matches the format produced by the Node.js JsonLogsSerializer.serializeRequest().
     """
-    import json
-    from collections import defaultdict
-
     resource_map: "dict[int, Any]" = {}
     scope_map: dict[int, dict[tuple[str, str], list[Any]]] = defaultdict(lambda: defaultdict(list))
 
@@ -318,8 +313,6 @@ def _serialize_metrics(metrics_data: Any) -> bytes:
 
     Matches the format produced by the Node.js JsonMetricsSerializer.serializeRequest().
     """
-    import json
-
     resource_metrics = []
 
     for resource_metric in metrics_data.resource_metrics:

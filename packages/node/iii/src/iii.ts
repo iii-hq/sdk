@@ -224,13 +224,12 @@ class Sdk implements ISdk {
     this.services.set(message.id, { ...message, message_type: MessageType.RegisterService })
   }
 
-  call = async <TInput, TOutput>(
+  trigger = async <TInput, TOutput>(
     function_id: string,
     data: TInput,
     timeoutMs?: number,
   ): Promise<TOutput> => {
     const invocation_id = crypto.randomUUID()
-    // Inject trace context and baggage if available
     const traceparent = injectTraceparent()
     const baggage = injectBaggage()
     const effectiveTimeout = timeoutMs ?? this.invocationTimeoutMs
@@ -266,15 +265,23 @@ class Sdk implements ISdk {
     })
   }
 
-  callVoid = <TInput>(function_id: string, data: TInput): void => {
-    // Inject trace context and baggage if available
+  triggerVoid = <TInput>(function_id: string, data: TInput): void => {
     const traceparent = injectTraceparent()
     const baggage = injectBaggage()
     this.sendMessage(MessageType.InvokeFunction, { function_id, data, traceparent, baggage })
   }
 
+  call = async <TInput, TOutput>(
+    function_id: string,
+    data: TInput,
+    timeoutMs?: number,
+  ): Promise<TOutput> => this.trigger<TInput, TOutput>(function_id, data, timeoutMs)
+
+  callVoid = <TInput>(function_id: string, data: TInput): void =>
+    this.triggerVoid(function_id, data)
+
   listFunctions = async (): Promise<FunctionInfo[]> => {
-    const result = await this.call<Record<string, never>, { functions: FunctionInfo[] }>(
+    const result = await this.trigger<Record<string, never>, { functions: FunctionInfo[] }>(
       EngineFunctions.LIST_FUNCTIONS,
       {},
     )
@@ -282,7 +289,7 @@ class Sdk implements ISdk {
   }
 
   listWorkers = async (): Promise<WorkerInfo[]> => {
-    const result = await this.call<Record<string, never>, { workers: WorkerInfo[] }>(
+    const result = await this.trigger<Record<string, never>, { workers: WorkerInfo[] }>(
       EngineFunctions.LIST_WORKERS,
       {},
     )
@@ -290,7 +297,7 @@ class Sdk implements ISdk {
   }
 
   private registerWorkerMetadata(): void {
-    this.callVoid(EngineFunctions.REGISTER_WORKER, {
+    this.triggerVoid(EngineFunctions.REGISTER_WORKER, {
       runtime: 'node',
       version: SDK_VERSION,
       name: this.workerName,

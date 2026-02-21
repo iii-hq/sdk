@@ -532,8 +532,7 @@ class III:
         self._services[id] = msg
         self._send_if_connected(msg)
 
-    async def call(self, path: str, data: Any, timeout: float = 30.0) -> Any:
-        """Invoke a remote function and wait for the result."""
+    async def trigger(self, path: str, data: Any, timeout: float = 30.0) -> Any:
         invocation_id = str(uuid.uuid4())
         future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
 
@@ -555,8 +554,7 @@ class III:
             self._pending.pop(invocation_id, None)
             raise TimeoutError(f"Invocation of '{path}' timed out after {timeout}s")
 
-    def call_void(self, path: str, data: Any) -> None:
-        """Fire-and-forget invocation (no response expected)."""
+    def trigger_void(self, path: str, data: Any) -> None:
         msg = InvokeFunctionMessage(
             function_id=path,
             data=data,
@@ -568,15 +566,21 @@ class III:
         except RuntimeError:
             self._enqueue(msg)
 
+    async def call(self, path: str, data: Any, timeout: float = 30.0) -> Any:
+        return await self.trigger(path, data, timeout)
+
+    def call_void(self, path: str, data: Any) -> None:
+        self.trigger_void(path, data)
+
     async def list_functions(self) -> list[FunctionInfo]:
         """List all registered functions from the engine."""
-        result = await self.call("engine::functions::list", {})
+        result = await self.trigger("engine::functions::list", {})
         functions_data = result.get("functions", [])
         return [FunctionInfo(**f) for f in functions_data]
 
     async def list_workers(self) -> list[WorkerInfo]:
         """List all connected workers from the engine."""
-        result = await self.call("engine::workers::list", {})
+        result = await self.trigger("engine::workers::list", {})
         workers_data = result.get("workers", [])
         return [WorkerInfo(**w) for w in workers_data]
 
@@ -598,7 +602,7 @@ class III:
 
     def _register_worker_metadata(self) -> None:
         """Register this worker's metadata with the engine."""
-        self.call_void("engine::workers::register", self._get_worker_metadata())
+        self.trigger_void("engine::workers::register", self._get_worker_metadata())
 
     def on_functions_available(self, callback: Callable[[list[FunctionInfo]], None]) -> Callable[[], None]:
         """Subscribe to function availability events.

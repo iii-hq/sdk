@@ -73,6 +73,16 @@ class FunctionRef:
 
 
 @dataclass
+class TelemetryOptions:
+    """Telemetry metadata to be reported to the engine."""
+
+    language: str | None = None
+    project_name: str | None = None
+    framework: str | None = None
+    amplitude_api_key: str | None = None
+
+
+@dataclass
 class InitOptions:
     """Options for configuring the III SDK."""
 
@@ -81,6 +91,7 @@ class InitOptions:
     invocation_timeout_ms: int = DEFAULT_INVOCATION_TIMEOUT_MS
     reconnection_config: ReconnectionConfig | None = None
     otel: dict[str, Any] | None = None
+    telemetry: TelemetryOptions | None = None
 
 
 class III:
@@ -593,11 +604,26 @@ class III:
 
         worker_name = self._options.worker_name or f"{platform.node()}:{os.getpid()}"
 
+        telemetry_opts = self._options.telemetry
+        language = (
+            (telemetry_opts.language if telemetry_opts else None)
+            or os.environ.get("LANG", "").split(".")[0]
+            or None
+        )
+
+        telemetry: dict[str, Any] = {
+            "language": language,
+            "project_name": telemetry_opts.project_name if telemetry_opts else None,
+            "framework": telemetry_opts.framework if telemetry_opts else None,
+            "amplitude_api_key": telemetry_opts.amplitude_api_key if telemetry_opts else None,
+        }
+
         return {
             "runtime": "python",
             "version": sdk_version,
             "name": worker_name,
             "os": f"{platform.system()} {platform.release()} ({platform.machine()})",
+            "telemetry": telemetry,
         }
 
     def _register_worker_metadata(self) -> None:

@@ -74,6 +74,13 @@ function getDefaultWorkerName(): string {
 /** Callback type for connection state changes */
 export type ConnectionStateCallback = (state: IIIConnectionState) => void
 
+export type TelemetryOptions = {
+  language?: string
+  project_name?: string
+  framework?: string
+  amplitude_api_key?: string
+}
+
 export type InitOptions = {
   workerName?: string
   enableMetricsReporting?: boolean
@@ -85,6 +92,7 @@ export type InitOptions = {
    * Set `{ enabled: false }` or env `OTEL_ENABLED=false/0/no/off` to disable.
    * The engineWsUrl is set automatically from the III address. */
   otel?: Omit<OtelConfig, 'engineWsUrl'>
+  telemetry?: TelemetryOptions
 }
 
 class Sdk implements ISdk {
@@ -114,7 +122,7 @@ class Sdk implements ISdk {
 
   constructor(
     private readonly address: string,
-    options?: InitOptions,
+    private readonly options?: InitOptions,
   ) {
     this.workerName = options?.workerName ?? getDefaultWorkerName()
     this.metricsReportingEnabled = options?.enableMetricsReporting ?? true
@@ -297,11 +305,23 @@ class Sdk implements ISdk {
   }
 
   private registerWorkerMetadata(): void {
+    const telemetryOpts = this.options?.telemetry
+    const language =
+      telemetryOpts?.language ??
+      Intl.DateTimeFormat().resolvedOptions().locale ??
+      process.env.LANG?.split('.')[0]
+
     this.triggerVoid(EngineFunctions.REGISTER_WORKER, {
       runtime: 'node',
       version: SDK_VERSION,
       name: this.workerName,
       os: getOsInfo(),
+      telemetry: {
+        language,
+        project_name: telemetryOpts?.project_name,
+        framework: telemetryOpts?.framework,
+        amplitude_api_key: telemetryOpts?.amplitude_api_key,
+      },
     })
   }
 

@@ -86,6 +86,19 @@ pub struct TriggerInfo {
     pub config: Value,
 }
 
+/// Telemetry metadata provided by the SDK to the engine.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WorkerTelemetryMeta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub framework: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amplitude_api_key: Option<String>,
+}
+
 /// Worker metadata for auto-registration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerMetadata {
@@ -93,6 +106,8 @@ pub struct WorkerMetadata {
     pub version: String,
     pub name: String,
     pub os: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub telemetry: Option<WorkerTelemetryMeta>,
 }
 
 impl Default for WorkerMetadata {
@@ -108,11 +123,21 @@ impl Default for WorkerMetadata {
             std::env::consts::FAMILY
         );
 
+        let language = std::env::var("LANG")
+            .or_else(|_| std::env::var("LC_ALL"))
+            .ok()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.split('.').next().unwrap_or(&s).to_string());
+
         Self {
             runtime: "rust".to_string(),
             version: SDK_VERSION.to_string(),
             name: format!("{}:{}", hostname, pid),
             os: os_info,
+            telemetry: Some(WorkerTelemetryMeta {
+                language,
+                ..Default::default()
+            }),
         }
     }
 }

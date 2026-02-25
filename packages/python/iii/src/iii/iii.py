@@ -91,7 +91,7 @@ class InitOptions:
     enable_metrics_reporting: bool = True
     invocation_timeout_ms: int = DEFAULT_INVOCATION_TIMEOUT_MS
     reconnection_config: ReconnectionConfig | None = None
-    otel: dict[str, Any] | None = None
+    otel: OtelConfig | dict[str, Any] | None = None
     telemetry: TelemetryOptions | None = None
 
 
@@ -128,7 +128,7 @@ class III:
         try:
             from .telemetry import attach_event_loop, init_otel
             loop = asyncio.get_running_loop()
-            otel_cfg = None
+            otel_cfg: OtelConfig | None = None
             if self._options.otel:
                 if isinstance(self._options.otel, OtelConfig):
                     otel_cfg = self._options.otel

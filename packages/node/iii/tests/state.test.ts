@@ -28,7 +28,7 @@ describe('State Operations', () => {
       const result = await iii.call('state::set', {
         scope,
         key,
-        data: testData,
+        value: testData,
       })
 
       expect(result).toBeDefined()
@@ -39,12 +39,12 @@ describe('State Operations', () => {
       const initialData: TestData = { value: 1 }
       const updatedData: TestData = { value: 2, updated: true }
 
-      await iii.call('state::set', { scope, key, data: initialData })
+      await iii.call('state::set', { scope, key, value: initialData })
 
       const result: StateSetResult<TestData> = await iii.call('state::set', {
         scope,
         key,
-        data: updatedData,
+        value: updatedData,
       })
 
       expect(result.old_value).toEqual(initialData)
@@ -56,7 +56,7 @@ describe('State Operations', () => {
     it('should get an existing state item', async () => {
       const data: TestData = { name: 'Test', value: 100 }
 
-      await iii.call('state::set', { scope, key, data })
+      await iii.call('state::set', { scope, key, value: data })
 
       const result: TestData = await iii.call('state::get', { scope, key })
 
@@ -73,7 +73,7 @@ describe('State Operations', () => {
 
   describe('state::delete', () => {
     it('should delete an existing state item', async () => {
-      await iii.call('state::set', { scope, key, data: { test: true } })
+      await iii.call('state::set', { scope, key, value: { test: true } })
       await iii.call('state::delete', { scope, key })
       await expect(iii.call('state::get', { scope, key })).resolves.toBeUndefined()
     })
@@ -96,7 +96,7 @@ describe('State Operations', () => {
 
       // Set multiple items
       for (const item of items) {
-        await iii.call('state::set', { scope, key: item.id, data: item })
+        await iii.call('state::set', { scope, key: item.id, value: item })
       }
 
       const result: TestDataWithId[] = await iii.call('state::list', { scope })
@@ -114,7 +114,7 @@ describe('State Operations', () => {
       const updatedData: TestData = { name: 'New Test Data', value: 200 }
       const reactiveResult: { data?: TestData; called: boolean } = { called: false }
 
-      await iii.call('state::set', { scope, key, data })
+      await iii.call('state::set', { scope, key, value: data })
 
       let trigger: Trigger | undefined
       let stateUpdatedFunction: FunctionRef | undefined
@@ -138,7 +138,7 @@ describe('State Operations', () => {
           config: { scope, key },
         })
 
-        await iii.call('state::set', { scope, key, data: updatedData })
+        await iii.call('state::set', { scope, key, value: updatedData })
         await execute(async () => {
           expect(reactiveResult.called).toBe(true)
           expect(reactiveResult.data).toEqual(updatedData)

@@ -31,6 +31,7 @@ from .iii_types import (
 )
 from .logger import Logger
 from .stream import IStream
+from .telemetry_types import OtelConfig
 from .triggers import Trigger, TriggerConfig, TriggerHandler
 from .types import RemoteFunctionData, RemoteTriggerTypeData
 
@@ -127,7 +128,13 @@ class III:
         try:
             from .telemetry import attach_event_loop, init_otel
             loop = asyncio.get_running_loop()
-            init_otel(loop=loop)
+            otel_cfg = None
+            if self._options.otel:
+                if isinstance(self._options.otel, OtelConfig):
+                    otel_cfg = self._options.otel
+                else:
+                    otel_cfg = OtelConfig(**self._options.otel)
+            init_otel(config=otel_cfg, loop=loop)
             attach_event_loop(loop)
         except ImportError:
             pass

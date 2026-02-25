@@ -1,13 +1,26 @@
 """Type definitions for the III SDK."""
 
+from __future__ import annotations
+
 import asyncio
-from typing import Any, Awaitable, Callable, Generic, Protocol, TypeVar
+import json
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generic, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .iii_types import FunctionInfo, RegisterFunctionMessage, RegisterTriggerMessage, RegisterTriggerTypeMessage
+from .iii_types import (
+    FunctionInfo,
+    RegisterFunctionMessage,
+    RegisterTriggerMessage,
+    RegisterTriggerTypeMessage,
+    StreamChannelRef,
+)
 from .stream import IStream
 from .triggers import Trigger, TriggerHandler
+
+if TYPE_CHECKING:
+    from .channels import ChannelReader, ChannelWriter
 
 TInput = TypeVar("TInput")
 TOutput = TypeVar("TOutput")
@@ -105,6 +118,8 @@ class IIIClient(Protocol):
 
     def on(self, event: str, callback: Callable[..., None]) -> Callable[[], None]: ...
 
+    async def create_channel(self, buffer_size: int | None = None) -> Channel: ...
+
     def create_stream(self, stream_name: str, stream: IStream[Any]) -> None: ...
 
     def on_functions_available(self, callback: FunctionsAvailableCallback) -> Callable[[], None]: ...
@@ -130,3 +145,68 @@ class ApiResponse(BaseModel, Generic[TOutput]):
     status_code: int = Field(alias="statusCode")
     body: Any
     headers: dict[str, str] = Field(default_factory=dict)
+
+
+@dataclass
+class Channel:
+    """A streaming channel pair for worker-to-worker data transfer."""
+
+    writer: ChannelWriter
+    reader: ChannelReader
+    writer_ref: StreamChannelRef
+    reader_ref: StreamChannelRef
+
+
+@dataclass
+class InternalHttpRequest:
+    """HTTP request with embedded channel references for streaming."""
+
+    path_params: dict[str, str]
+    query_params: dict[str, str | list[str]]
+    body: Any
+    headers: dict[str, str | list[str]]
+    method: str
+    response: ChannelWriter
+    request_body: ChannelReader
+
+
+class HttpResponse:
+    """Streaming HTTP response built on top of a ChannelWriter."""
+
+    def __init__(self, writer: ChannelWriter) -> None:
+        self._writer = writer
+
+    async def status(self, status_code: int) -> None:
+        await self._writer.send_message_async(json.dumps({"type": "set_status", "status_code": status_code}))
+
+    async def headers(self, headers: dict[str, str]) -> None:
+        await self._writer.send_message_async(json.dumps({"type": "set_headers", "headers": headers}))
+
+    @property
+    def writer(self) -> ChannelWriter:
+        return self._writer
+
+    def close(self) -> None:
+        self._writer.close()
+
+
+@dataclass
+class HttpRequest:
+    """HTTP request without the response writer."""
+
+    path_params: dict[str, str]
+    query_params: dict[str, str | list[str]]
+    body: Any
+    headers: dict[str, str | list[str]]
+    method: str
+    request_body: ChannelReader
+
+
+def is_channel_ref(value: Any) -> bool:
+    """Check if a value looks like a StreamChannelRef."""
+    return (
+        isinstance(value, dict)
+        and "channel_id" in value
+        and "access_key" in value
+        and "direction" in value
+    )

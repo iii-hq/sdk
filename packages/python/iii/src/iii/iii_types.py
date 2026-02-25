@@ -163,6 +163,14 @@ class WorkerInfo(BaseModel):
     active_invocations: int
 
 
+class StreamChannelRef(BaseModel):
+    """Reference to a streaming channel for worker-to-worker data transfer."""
+
+    channel_id: str
+    access_key: str
+    direction: Literal["read", "write"]
+
+
 IIIMessage = (
     RegisterFunctionMessage
     | UnregisterFunctionMessage

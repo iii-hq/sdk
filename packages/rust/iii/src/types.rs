@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
+    channels::{ChannelReader, ChannelWriter, StreamChannelRef},
     error::IIIError,
     protocol::{RegisterFunctionMessage, RegisterTriggerTypeMessage},
     triggers::TriggerHandler,
@@ -182,6 +183,14 @@ pub struct ApiResponse<T = Value> {
     #[serde(default)]
     pub headers: HashMap<String, String>,
     pub body: T,
+}
+
+/// A streaming channel pair for worker-to-worker data transfer.
+pub struct Channel {
+    pub writer: ChannelWriter,
+    pub reader: ChannelReader,
+    pub writer_ref: StreamChannelRef,
+    pub reader_ref: StreamChannelRef,
 }
 
 #[cfg(test)]

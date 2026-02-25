@@ -1,3 +1,4 @@
+pub mod channels;
 pub mod context;
 pub mod error;
 pub mod iii;
@@ -9,6 +10,10 @@ pub mod telemetry;
 pub mod triggers;
 pub mod types;
 
+pub use channels::{
+    ChannelItem, ChannelReader, ChannelWriter, StreamChannelRef, StreamDirection,
+    extract_channel_refs, is_channel_ref,
+};
 pub use context::{Context, get_context, with_context};
 pub use error::IIIError;
 pub use iii::{
@@ -21,7 +26,9 @@ pub use protocol::{
 };
 pub use stream::{Streams, UpdateBuilder};
 pub use triggers::{Trigger, TriggerConfig, TriggerHandler};
-pub use types::{ApiRequest, ApiResponse, FieldPath, StreamUpdateInput, UpdateOp, UpdateResult};
+pub use types::{
+    ApiRequest, ApiResponse, Channel, FieldPath, StreamUpdateInput, UpdateOp, UpdateResult,
+};
 
 pub use serde_json::Value;
 

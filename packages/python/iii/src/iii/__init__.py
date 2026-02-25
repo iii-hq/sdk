@@ -4,7 +4,8 @@ import logging
 
 from .context import Context, get_context, with_context
 from .iii import III, ConnectionStateCallback, FunctionRef, IIIConnectionState, InitOptions, ReconnectionConfig
-from .iii_types import FunctionInfo, WorkerInfo, WorkerStatus
+from .channels import ChannelReader, ChannelWriter
+from .iii_types import FunctionInfo, StreamChannelRef, WorkerInfo, WorkerStatus
 from .logger import Logger
 from .stream import (
     IStream,
@@ -28,7 +29,16 @@ from .stream import (
 )
 from .telemetry import get_meter, get_tracer, init_otel, is_initialized, shutdown_otel
 from .telemetry_types import OtelConfig
-from .types import ApiRequest, ApiResponse, FunctionsAvailableCallback, RemoteFunctionHandler
+from .types import (
+    ApiRequest,
+    ApiResponse,
+    Channel,
+    FunctionsAvailableCallback,
+    HttpRequest,
+    HttpResponse,
+    RemoteFunctionHandler,
+    is_channel_ref,
+)
 
 
 def configure_logging(level: int = logging.INFO, format: str | None = None) -> None:
@@ -60,6 +70,14 @@ __all__ = [
     # API types
     "ApiRequest",
     "ApiResponse",
+    "HttpRequest",
+    "HttpResponse",
+    # Channel types
+    "Channel",
+    "ChannelWriter",
+    "ChannelReader",
+    "StreamChannelRef",
+    "is_channel_ref",
     # SDK types
     "FunctionInfo",
     "WorkerInfo",

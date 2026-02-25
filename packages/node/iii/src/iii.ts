@@ -2,6 +2,7 @@ import { context } from '@opentelemetry/api'
 import { createRequire } from 'node:module'
 import * as os from 'node:os'
 import { type Data, WebSocket } from 'ws'
+import { ChannelReader, ChannelWriter } from './channels'
 import {
   type IIIConnectionState,
   type IIIReconnectionConfig,
@@ -23,6 +24,7 @@ import {
   type TriggerRegistrationResultMessage,
   type WorkerInfo,
   type WorkerRegisteredMessage,
+  type StreamChannelRef,
 } from './iii-types'
 import { withContext } from './context'
 import { Logger } from './logger'
@@ -59,6 +61,7 @@ import type {
   Trigger,
   FunctionRef,
 } from './types'
+import { isChannelRef } from './utils'
 
 const require = createRequire(import.meta.url)
 const { version: SDK_VERSION } = require('../package.json')
@@ -230,6 +233,20 @@ class Sdk implements ISdk {
   registerService = (message: Omit<RegisterServiceMessage, 'message_type'>): void => {
     this.sendMessage(MessageType.RegisterService, message, true)
     this.services.set(message.id, { ...message, message_type: MessageType.RegisterService })
+  }
+
+  createChannel = async (bufferSize?: number): Promise<import('./types').Channel> => {
+    const result = await this.call<
+      { buffer_size?: number },
+      { writer: StreamChannelRef; reader: StreamChannelRef }
+    >('channels::create', { buffer_size: bufferSize })
+
+    return {
+      writer: new ChannelWriter(this.address, result.writer),
+      reader: new ChannelReader(this.address, result.reader),
+      writerRef: result.writer,
+      readerRef: result.reader,
+    }
   }
 
   trigger = async <TInput, TOutput>(
@@ -709,6 +726,26 @@ class Sdk implements ISdk {
     this.invocations.delete(invocation_id)
   }
 
+  private resolveChannels(
+    data: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const resolved: Record<string, unknown> = {}
+
+    for (const [name, value] of Object.entries(data)) {
+      if (isChannelRef(value)) {
+        resolved[name] = value.direction === 'read'
+          ? new ChannelReader(this.address, value)
+          : new ChannelWriter(this.address, value)
+      } else if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        resolved[name] = this.resolveChannels(value as Record<string, unknown>)
+      } else {
+        resolved[name] = value
+      }
+    }
+
+    return resolved
+  }
+
   private async onInvokeFunction<TInput>(
     invocation_id: string | undefined,
     function_id: string,
@@ -717,14 +754,17 @@ class Sdk implements ISdk {
     baggage?: string,
   ): Promise<unknown> {
     const fn = this.functions.get(function_id)
-    // Get response traceparent/baggage after handler runs (will be current span's context)
     const getResponseTraceparent = () => injectTraceparent() ?? traceparent
     const getResponseBaggage = () => injectBaggage() ?? baggage
+
+    const resolvedInput = input && typeof input === 'object'
+      ? this.resolveChannels(input as Record<string, unknown>)
+      : input
 
     if (fn) {
       if (!invocation_id) {
         try {
-          await fn.handler(input, traceparent, baggage)
+          await fn.handler(resolvedInput, traceparent, baggage)
         } catch (error) {
           this.logError(`Error invoking function ${function_id}`, error)
         }
@@ -732,7 +772,7 @@ class Sdk implements ISdk {
       }
 
       try {
-        const result = await fn.handler(input, traceparent, baggage)
+        const result = await fn.handler(resolvedInput, traceparent, baggage)
         this.sendMessage(MessageType.InvocationResult, {
           invocation_id,
           function_id,

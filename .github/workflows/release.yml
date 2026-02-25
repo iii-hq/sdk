@@ -130,14 +130,20 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: uv sync --extra dev
 
       - name: Lint
-        run: ruff check src
+        run: uv run ruff check src
 
       - name: Type check
-        run: mypy src
+        run: uv run mypy src
+
+      - name: Run tests
+        run: uv run pytest -q
 
   test-rust:
     name: Test Rust SDK
@@ -163,6 +169,9 @@ jobs:
 
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --all-features --quiet
 
   create-release:
     name: Create Release

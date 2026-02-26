@@ -726,24 +726,23 @@ class Sdk implements ISdk {
     this.invocations.delete(invocation_id)
   }
 
-  private resolveChannels(
-    data: Record<string, unknown>,
-  ): Record<string, unknown> {
-    const resolved: Record<string, unknown> = {}
-
-    for (const [name, value] of Object.entries(data)) {
-      if (isChannelRef(value)) {
-        resolved[name] = value.direction === 'read'
-          ? new ChannelReader(this.address, value)
-          : new ChannelWriter(this.address, value)
-      } else if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-        resolved[name] = this.resolveChannels(value as Record<string, unknown>)
-      } else {
-        resolved[name] = value
-      }
+  private resolveChannelValue(value: unknown): unknown {
+    if (isChannelRef(value)) {
+      return value.direction === 'read'
+        ? new ChannelReader(this.address, value)
+        : new ChannelWriter(this.address, value)
     }
-
-    return resolved
+    if (Array.isArray(value)) {
+      return value.map(item => this.resolveChannelValue(item))
+    }
+    if (value !== null && typeof value === 'object') {
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        out[k] = this.resolveChannelValue(v)
+      }
+      return out
+    }
+    return value
   }
 
   private async onInvokeFunction<TInput>(
@@ -757,9 +756,7 @@ class Sdk implements ISdk {
     const getResponseTraceparent = () => injectTraceparent() ?? traceparent
     const getResponseBaggage = () => injectBaggage() ?? baggage
 
-    const resolvedInput = input && typeof input === 'object'
-      ? this.resolveChannels(input as Record<string, unknown>)
-      : input
+    const resolvedInput = this.resolveChannelValue(input) as TInput
 
     if (fn) {
       if (!invocation_id) {

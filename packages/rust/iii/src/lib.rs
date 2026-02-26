@@ -11,7 +11,7 @@ pub mod triggers;
 pub mod types;
 
 pub use channels::{
-    ChannelItem, ChannelReader, ChannelWriter, StreamChannelRef, ChannelDirection,
+    ChannelDirection, ChannelItem, ChannelReader, ChannelWriter, StreamChannelRef,
     extract_channel_refs, is_channel_ref,
 };
 pub use context::{Context, get_context, with_context};

@@ -1,8 +1,9 @@
 import { Readable, Writable } from 'node:stream'
 import { WebSocket } from 'ws'
-import { StreamChannelRef } from './iii-types'
+import type { StreamChannelRef } from './iii-types'
 
 export class ChannelWriter {
+  private static readonly FRAME_SIZE = 64 * 1024
   private ws: WebSocket | null = null
   private wsReady = false
   private readonly pendingMessages: { data: Buffer | string; callback: (err?: Error | null) => void }[] = []
@@ -15,7 +16,7 @@ export class ChannelWriter {
     this.stream = new Writable({
       write: (chunk: Buffer, _encoding, callback) => {
         const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-        this.sendRaw(buf, callback)
+        this.sendChunked(buf, callback)
       },
       final: (callback) => {
         if (!this.ws) {
@@ -25,7 +26,7 @@ export class ChannelWriter {
         if (this.wsReady) {
           this.ws.close(1000, 'stream_complete')
         } else {
-          this.ws.on('open', () => this.ws!.close(1000, 'stream_complete'))
+          this.ws.on('open', () => this.ws?.close(1000, 'stream_complete'))
         }
         callback()
       },
@@ -43,7 +44,7 @@ export class ChannelWriter {
     this.ws.on('open', () => {
       this.wsReady = true
       for (const { data, callback } of this.pendingMessages) {
-        this.ws!.send(data, callback)
+        this.ws?.send(data, callback)
       }
       this.pendingMessages.length = 0
     })
@@ -71,14 +72,27 @@ export class ChannelWriter {
     if (this.wsReady) {
       this.ws.close(1000, 'channel_close')
     } else {
-      this.ws.on('open', () => this.ws!.close(1000, 'channel_close'))
+      this.ws.on('open', () => this.ws?.close(1000, 'channel_close'))
     }
+  }
+
+  private sendChunked(data: Buffer, callback: (err?: Error | null) => void): void {
+    let offset = 0
+    const sendNext = (err?: Error | null): void => {
+      if (err) return callback(err)
+      if (offset >= data.length) return callback(null)
+      const end = Math.min(offset + ChannelWriter.FRAME_SIZE, data.length)
+      const part = data.subarray(offset, end)
+      offset = end
+      this.sendRaw(part, sendNext)
+    }
+    sendNext(null)
   }
 
   private sendRaw(data: Buffer | string, callback: (err?: Error | null) => void): void {
     this.ensureConnected()
-    if (this.wsReady) {
-      this.ws!.send(data, (err) => callback(err ?? null))
+    if (this.wsReady && this.ws) {
+      this.ws.send(data, (err) => callback(err ?? null))
     } else {
       this.pendingMessages.push({ data, callback })
     }
@@ -101,6 +115,13 @@ export class ChannelReader {
         self.ensureConnected()
         if (self.ws) self.ws.resume()
       },
+      destroy(err, callback) {
+        if (self.ws && self.ws.readyState !== WebSocket.CLOSED) {
+          self.ws.terminate()
+        }
+        self.ws = null
+        callback(err)
+      },
     })
   }
 
@@ -116,7 +137,7 @@ export class ChannelReader {
     this.ws.on('message', (data: Buffer, isBinary: boolean) => {
       if (isBinary) {
         if (!this.stream.push(data)) {
-          this.ws!.pause()
+          this.ws?.pause()
         }
       } else {
         const msg = data.toString('utf-8')
@@ -127,7 +148,8 @@ export class ChannelReader {
     })
 
     this.ws.on('close', () => {
-      this.stream.push(null)
+      this.ws = null
+      if (!this.stream.destroyed) this.stream.push(null)
     })
 
     this.ws.on('error', (err) => {

@@ -55,28 +55,29 @@ async def test_stream_data_from_sender_to_processor(iii_client: III):
 
     await asyncio.sleep(0.3)
 
-    records = [
-        {"name": "cpu_usage", "value": 72},
-        {"name": "memory_mb", "value": 2048},
-        {"name": "disk_iops", "value": 340},
-        {"name": "network_mbps", "value": 95},
-        {"name": "latency_ms", "value": 12},
-    ]
+    try:
+        records = [
+            {"name": "cpu_usage", "value": 72},
+            {"name": "memory_mb", "value": 2048},
+            {"name": "disk_iops", "value": 340},
+            {"name": "network_mbps", "value": 95},
+            {"name": "latency_ms", "value": 12},
+        ]
 
-    result = await iii_client.call("test.data.sender", {"records": records})
+        result = await iii_client.call("test.data.sender", {"records": records})
 
-    assert result["label"] == "metrics-batch"
-    assert len(result["messages"]) == 5
+        assert result["label"] == "metrics-batch"
+        assert len(result["messages"]) == 5
 
-    msgs = {m["key"]: m["value"] for m in result["messages"]}
-    assert msgs["count"] == 5
-    assert msgs["sum"] == 2567
-    assert msgs["average"] == 513.4
-    assert msgs["min"] == 12
-    assert msgs["max"] == 2048
-
-    sender_ref.unregister()
-    proc_ref.unregister()
+        msgs = {m["key"]: m["value"] for m in result["messages"]}
+        assert msgs["count"] == 5
+        assert msgs["sum"] == 2567
+        assert msgs["average"] == 513.4
+        assert msgs["min"] == 12
+        assert msgs["max"] == 2048
+    finally:
+        sender_ref.unregister()
+        proc_ref.unregister()
 
 
 @pytest.mark.asyncio
@@ -125,6 +126,11 @@ async def test_bidirectional_streaming(iii_client: III):
         messages = []
         output_channel.reader.on_message(lambda msg: messages.append(json.loads(msg)))
 
+        call_task = asyncio.create_task(iii_client.call("test.stream.worker", {
+            "reader": input_channel.reader_ref.model_dump(),
+            "writer": output_channel.writer_ref.model_dump(),
+        }))
+
         text_bytes = text.encode("utf-8")
         offset = 0
         while offset < len(text_bytes):
@@ -132,11 +138,6 @@ async def test_bidirectional_streaming(iii_client: III):
             await input_channel.writer.write(text_bytes[offset:end])
             offset = end
         await input_channel.writer.close_async()
-
-        call_task = asyncio.create_task(iii_client.call("test.stream.worker", {
-            "reader": input_channel.reader_ref.model_dump(),
-            "writer": output_channel.writer_ref.model_dump(),
-        }))
 
         result_data = await output_channel.reader.read_all()
 
@@ -154,25 +155,26 @@ async def test_bidirectional_streaming(iii_client: III):
 
     await asyncio.sleep(0.3)
 
-    text = "The quick brown fox jumps over the lazy dog and then runs around the park"
+    try:
+        text = "The quick brown fox jumps over the lazy dog and then runs around the park"
 
-    result = await iii_client.call("test.stream.coordinator", {
-        "text": text,
-        "chunkSize": 10,
-    })
+        result = await iii_client.call("test.stream.coordinator", {
+            "text": text,
+            "chunkSize": 10,
+        })
 
-    progress_msgs = [m for m in result["messages"] if m["type"] == "progress"]
-    complete_msg = next((m for m in result["messages"] if m["type"] == "complete"), None)
+        progress_msgs = [m for m in result["messages"] if m["type"] == "progress"]
+        complete_msg = next((m for m in result["messages"] if m["type"] == "complete"), None)
 
-    assert len(progress_msgs) > 0
-    assert complete_msg is not None
-    assert complete_msg["word_count"] == len(text.split())
+        assert len(progress_msgs) > 0
+        assert complete_msg is not None
+        assert complete_msg["word_count"] == len(text.split())
 
-    assert result["binaryResult"]["total"] == len(text.split())
-    assert len(result["binaryResult"]["words"]) == 5
-    assert result["binaryResult"]["words"] == ["The", "quick", "brown", "fox", "jumps"]
+        assert result["binaryResult"]["total"] == len(text.split())
+        assert len(result["binaryResult"]["words"]) == 5
+        assert result["binaryResult"]["words"] == ["The", "quick", "brown", "fox", "jumps"]
 
-    assert result["workerResult"]["status"] == "done"
-
-    coord_ref.unregister()
-    worker_ref.unregister()
+        assert result["workerResult"]["status"] == "done"
+    finally:
+        coord_ref.unregister()
+        worker_ref.unregister()

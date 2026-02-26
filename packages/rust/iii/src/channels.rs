@@ -30,16 +30,12 @@ pub enum ChannelItem {
 }
 
 type WsWriter = futures_util::stream::SplitSink<
-    tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-    >,
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
     WsMessage,
 >;
 
 type WsReader = futures_util::stream::SplitStream<
-    tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-    >,
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 >;
 
 fn build_channel_url(
@@ -246,8 +242,21 @@ fn extract_refs_recursive(
                     refs.push((path, channel_ref));
                 }
             } else if value.is_object() {
-                extract_refs_recursive(value, path, refs);
+                extract_refs_recursive(value, path.clone(), refs);
+            } else if let Some(arr) = value.as_array() {
+                for (idx, item) in arr.iter().enumerate() {
+                    extract_refs_recursive(item, format!("{path}[{idx}]"), refs);
+                }
             }
+        }
+    } else if let Some(arr) = data.as_array() {
+        for (idx, item) in arr.iter().enumerate() {
+            let path = if prefix.is_empty() {
+                format!("[{idx}]")
+            } else {
+                format!("{prefix}[{idx}]")
+            };
+            extract_refs_recursive(item, path, refs);
         }
     }
 }

@@ -5,7 +5,7 @@ export { Logger } from './logger'
 export type { ISdk } from './types'
 
 export type { ApiRequest, HttpRequest, HttpResponse, ApiResponse, ApiStreamResponse, Channel } from './types'
-export type { StreamChannelRef } from './channels'
+export type { StreamChannelRef } from './iii-types'
 export { ChannelWriter, ChannelReader } from './channels'
 
 export { http } from './utils'

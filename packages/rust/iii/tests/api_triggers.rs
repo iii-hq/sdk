@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::sync::Mutex;
 
 use iii_sdk::{III, IIIError};
@@ -17,9 +17,12 @@ use std::path::PathBuf;
 
 fn test_pdf_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent().unwrap()
-        .parent().unwrap()
-        .parent().unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
         .join("test-assets")
         .join("handbook.pdf")
 }
@@ -46,10 +49,14 @@ async fn get_endpoint() {
     });
 
     let _trigger = iii
-        .register_trigger("http", "test.api.get.rs", json!({
-            "api_path": "test/rs/hello",
-            "http_method": "GET",
-        }))
+        .register_trigger(
+            "http",
+            "test.api.get.rs",
+            json!({
+                "api_path": "test/rs/hello",
+                "http_method": "GET",
+            }),
+        )
         .expect("register trigger");
 
     settle().await;
@@ -82,10 +89,14 @@ async fn post_endpoint_with_body() {
     });
 
     let _trigger = iii
-        .register_trigger("http", "test.api.post.rs", json!({
-            "api_path": "test/rs/items",
-            "http_method": "POST",
-        }))
+        .register_trigger(
+            "http",
+            "test.api.post.rs",
+            json!({
+                "api_path": "test/rs/items",
+                "http_method": "POST",
+            }),
+        )
         .expect("register trigger");
 
     settle().await;
@@ -122,10 +133,14 @@ async fn path_parameters() {
     });
 
     let _trigger = iii
-        .register_trigger("http", "test.api.getbyid.rs", json!({
-            "api_path": "test/rs/items/:id",
-            "http_method": "GET",
-        }))
+        .register_trigger(
+            "http",
+            "test.api.getbyid.rs",
+            json!({
+                "api_path": "test/rs/items/:id",
+                "http_method": "GET",
+            }),
+        )
         .expect("register trigger");
 
     settle().await;
@@ -157,10 +172,14 @@ async fn query_parameters() {
     });
 
     let _trigger = iii
-        .register_trigger("http", "test.api.search.rs", json!({
-            "api_path": "test/rs/search",
-            "http_method": "GET",
-        }))
+        .register_trigger(
+            "http",
+            "test.api.search.rs",
+            json!({
+                "api_path": "test/rs/search",
+                "http_method": "GET",
+            }),
+        )
         .expect("register trigger");
 
     settle().await;
@@ -190,10 +209,14 @@ async fn custom_status_code() {
     });
 
     let _trigger = iii
-        .register_trigger("http", "test.api.notfound.rs", json!({
-            "api_path": "test/rs/missing",
-            "http_method": "GET",
-        }))
+        .register_trigger(
+            "http",
+            "test.api.notfound.rs",
+            json!({
+                "api_path": "test/rs/missing",
+                "http_method": "GET",
+            }),
+        )
         .expect("register trigger");
 
     settle().await;
@@ -241,26 +264,48 @@ async fn download_pdf_streaming() {
 
             let writer = iii_sdk::ChannelWriter::new(iii.address(), &writer_ref);
 
-            writer.send_message(&serde_json::to_string(&json!({
-                "type": "set_status", "status_code": 200
-            })).unwrap()).await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .send_message(
+                    &serde_json::to_string(&json!({
+                        "type": "set_status", "status_code": 200
+                    }))
+                    .unwrap(),
+                )
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
-            writer.send_message(&serde_json::to_string(&json!({
-                "type": "set_headers", "headers": {"content-type": "application/pdf"}
-            })).unwrap()).await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .send_message(
+                    &serde_json::to_string(&json!({
+                        "type": "set_headers", "headers": {"content-type": "application/pdf"}
+                    }))
+                    .unwrap(),
+                )
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
-            writer.write(&pdf_data).await.map_err(|e| IIIError::Handler(e.to_string()))?;
-            writer.close().await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .write(&pdf_data)
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .close()
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
             Ok(Value::Null)
         }
     });
 
     let _trigger = iii
-        .register_trigger("http", "test.api.download.pdf.rs", json!({
-            "api_path": "test/rs/download/pdf",
-            "http_method": "GET",
-        }))
+        .register_trigger(
+            "http",
+            "test.api.download.pdf.rs",
+            json!({
+                "api_path": "test/rs/download/pdf",
+                "http_method": "GET",
+            }),
+        )
         .expect("register trigger");
 
     settle().await;
@@ -273,7 +318,9 @@ async fn download_pdf_streaming() {
 
     assert_eq!(resp.status().as_u16(), 200);
     assert_eq!(
-        resp.headers().get("content-type").and_then(|v| v.to_str().ok()),
+        resp.headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
         Some("application/pdf")
     );
 
@@ -317,39 +364,67 @@ async fn upload_pdf_streaming() {
 
             let reader_ref = refs
                 .iter()
-                .find(|(k, r)| k.contains("request_body") && matches!(r.direction, iii_sdk::ChannelDirection::Read))
+                .find(|(k, r)| {
+                    k.contains("request_body")
+                        && matches!(r.direction, iii_sdk::ChannelDirection::Read)
+                })
                 .map(|(_, r)| r.clone())
                 .expect("missing reader ref");
 
             let writer = iii_sdk::ChannelWriter::new(iii.address(), &writer_ref);
             let reader = iii_sdk::ChannelReader::new(iii.address(), &reader_ref);
 
-            writer.send_message(&serde_json::to_string(&json!({
-                "type": "set_status", "status_code": 200
-            })).unwrap()).await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .send_message(
+                    &serde_json::to_string(&json!({
+                        "type": "set_status", "status_code": 200
+                    }))
+                    .unwrap(),
+                )
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
-            writer.send_message(&serde_json::to_string(&json!({
-                "type": "set_headers", "headers": {"content-type": "application/json"}
-            })).unwrap()).await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .send_message(
+                    &serde_json::to_string(&json!({
+                        "type": "set_headers", "headers": {"content-type": "application/json"}
+                    }))
+                    .unwrap(),
+                )
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
-            let data = reader.read_all().await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            let data = reader
+                .read_all()
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
             let len = data.len();
             *received.lock().await = data;
 
             let body = serde_json::to_vec(&json!({"received_size": len}))
                 .map_err(|e| IIIError::Handler(e.to_string()))?;
-            writer.write(&body).await.map_err(|e| IIIError::Handler(e.to_string()))?;
-            writer.close().await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .write(&body)
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .close()
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
             Ok(Value::Null)
         }
     });
 
     let _trigger = iii
-        .register_trigger("http", "test.api.upload.pdf.rs", json!({
-            "api_path": "test/rs/upload/pdf",
-            "http_method": "POST",
-        }))
+        .register_trigger(
+            "http",
+            "test.api.upload.pdf.rs",
+            json!({
+                "api_path": "test/rs/upload/pdf",
+                "http_method": "POST",
+            }),
+        )
         .expect("register trigger");
 
     settle().await;
@@ -401,17 +476,29 @@ async fn sse_streaming() {
 
             let writer = iii_sdk::ChannelWriter::new(iii.address(), &writer_ref);
 
-            writer.send_message(&serde_json::to_string(&json!({
-                "type": "set_status", "status_code": 200
-            })).unwrap()).await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .send_message(
+                    &serde_json::to_string(&json!({
+                        "type": "set_status", "status_code": 200
+                    }))
+                    .unwrap(),
+                )
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
-            writer.send_message(&serde_json::to_string(&json!({
-                "type": "set_headers", "headers": {
-                    "content-type": "text/event-stream",
-                    "cache-control": "no-cache",
-                    "connection": "keep-alive",
-                }
-            })).unwrap()).await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .send_message(
+                    &serde_json::to_string(&json!({
+                        "type": "set_headers", "headers": {
+                            "content-type": "text/event-stream",
+                            "cache-control": "no-cache",
+                            "connection": "keep-alive",
+                        }
+                    }))
+                    .unwrap(),
+                )
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
             for event in &events {
                 let mut frame = String::new();
@@ -422,20 +509,30 @@ async fn sse_streaming() {
                 }
                 frame.push('\n');
 
-                writer.write(frame.as_bytes()).await.map_err(|e| IIIError::Handler(e.to_string()))?;
+                writer
+                    .write(frame.as_bytes())
+                    .await
+                    .map_err(|e| IIIError::Handler(e.to_string()))?;
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
 
-            writer.close().await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .close()
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
             Ok(Value::Null)
         }
     });
 
     let _trigger = iii
-        .register_trigger("http", "test.api.sse.rs", json!({
-            "api_path": "test/rs/sse",
-            "http_method": "GET",
-        }))
+        .register_trigger(
+            "http",
+            "test.api.sse.rs",
+            json!({
+                "api_path": "test/rs/sse",
+                "http_method": "GET",
+            }),
+        )
         .expect("register trigger");
 
     settle().await;
@@ -448,7 +545,9 @@ async fn sse_streaming() {
 
     assert_eq!(resp.status().as_u16(), 200);
     assert_eq!(
-        resp.headers().get("content-type").and_then(|v| v.to_str().ok()),
+        resp.headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
         Some("text/event-stream")
     );
 
@@ -506,14 +605,20 @@ async fn urlencoded_form_data() {
 
             let reader_ref = refs
                 .iter()
-                .find(|(k, r)| k.contains("request_body") && matches!(r.direction, iii_sdk::ChannelDirection::Read))
+                .find(|(k, r)| {
+                    k.contains("request_body")
+                        && matches!(r.direction, iii_sdk::ChannelDirection::Read)
+                })
                 .map(|(_, r)| r.clone())
                 .expect("missing reader ref");
 
             let writer = iii_sdk::ChannelWriter::new(iii.address(), &writer_ref);
             let reader = iii_sdk::ChannelReader::new(iii.address(), &reader_ref);
 
-            let raw = reader.read_all().await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            let raw = reader
+                .read_all()
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
             let body = String::from_utf8_lossy(&raw);
 
             let params: std::collections::HashMap<String, String> = body
@@ -528,32 +633,55 @@ async fn urlencoded_form_data() {
                 })
                 .collect();
 
-            writer.send_message(&serde_json::to_string(&json!({
-                "type": "set_status", "status_code": 200
-            })).unwrap()).await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .send_message(
+                    &serde_json::to_string(&json!({
+                        "type": "set_status", "status_code": 200
+                    }))
+                    .unwrap(),
+                )
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
-            writer.send_message(&serde_json::to_string(&json!({
-                "type": "set_headers", "headers": {"content-type": "application/json"}
-            })).unwrap()).await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .send_message(
+                    &serde_json::to_string(&json!({
+                        "type": "set_headers", "headers": {"content-type": "application/json"}
+                    }))
+                    .unwrap(),
+                )
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
             let result = serde_json::to_vec(&json!({
                 "name": params.get("name"),
                 "email": params.get("email"),
                 "age": params.get("age"),
-            })).map_err(|e| IIIError::Handler(e.to_string()))?;
+            }))
+            .map_err(|e| IIIError::Handler(e.to_string()))?;
 
-            writer.write(&result).await.map_err(|e| IIIError::Handler(e.to_string()))?;
-            writer.close().await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .write(&result)
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .close()
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
             Ok(Value::Null)
         }
     });
 
     let _trigger = iii
-        .register_trigger("http", "test.api.form.urlencoded.rs", json!({
-            "api_path": "test/rs/form/urlencoded",
-            "http_method": "POST",
-        }))
+        .register_trigger(
+            "http",
+            "test.api.form.urlencoded.rs",
+            json!({
+                "api_path": "test/rs/form/urlencoded",
+                "http_method": "POST",
+            }),
+        )
         .expect("register trigger");
 
     settle().await;
@@ -577,19 +705,21 @@ async fn urlencoded_form_data() {
 
 fn urlencoding_decode(s: &str) -> String {
     let s = s.replace('+', " ");
-    let mut result = String::with_capacity(s.len());
+    let mut bytes: Vec<u8> = Vec::with_capacity(s.len());
     let mut chars = s.chars();
     while let Some(c) = chars.next() {
         if c == '%' {
             let hi = chars.next().unwrap_or('0');
             let lo = chars.next().unwrap_or('0');
             let byte = u8::from_str_radix(&format!("{hi}{lo}"), 16).unwrap_or(b'?');
-            result.push(byte as char);
+            bytes.push(byte);
         } else {
-            result.push(c);
+            let mut buf = [0u8; 4];
+            let enc = c.encode_utf8(&mut buf);
+            bytes.extend_from_slice(enc.as_bytes());
         }
     }
-    result
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 #[tokio::test]
@@ -621,14 +751,20 @@ async fn multipart_form_data() {
 
             let reader_ref = refs
                 .iter()
-                .find(|(k, r)| k.contains("request_body") && matches!(r.direction, iii_sdk::ChannelDirection::Read))
+                .find(|(k, r)| {
+                    k.contains("request_body")
+                        && matches!(r.direction, iii_sdk::ChannelDirection::Read)
+                })
                 .map(|(_, r)| r.clone())
                 .expect("missing reader ref");
 
             let writer = iii_sdk::ChannelWriter::new(iii.address(), &writer_ref);
             let reader = iii_sdk::ChannelReader::new(iii.address(), &reader_ref);
 
-            let raw = reader.read_all().await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            let raw = reader
+                .read_all()
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
             let content_type = input
                 .get("headers")
@@ -645,13 +781,25 @@ async fn multipart_form_data() {
             let has_description = body_text.contains("A test upload");
             let has_filename = body_text.contains("filename=\"handbook.pdf\"");
 
-            writer.send_message(&serde_json::to_string(&json!({
-                "type": "set_status", "status_code": 200
-            })).unwrap()).await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .send_message(
+                    &serde_json::to_string(&json!({
+                        "type": "set_status", "status_code": 200
+                    }))
+                    .unwrap(),
+                )
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
-            writer.send_message(&serde_json::to_string(&json!({
-                "type": "set_headers", "headers": {"content-type": "application/json"}
-            })).unwrap()).await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .send_message(
+                    &serde_json::to_string(&json!({
+                        "type": "set_headers", "headers": {"content-type": "application/json"}
+                    }))
+                    .unwrap(),
+                )
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
             let result = serde_json::to_vec(&json!({
                 "has_boundary": has_boundary,
@@ -659,20 +807,31 @@ async fn multipart_form_data() {
                 "has_description": has_description,
                 "has_filename": has_filename,
                 "body_size": raw.len(),
-            })).map_err(|e| IIIError::Handler(e.to_string()))?;
+            }))
+            .map_err(|e| IIIError::Handler(e.to_string()))?;
 
-            writer.write(&result).await.map_err(|e| IIIError::Handler(e.to_string()))?;
-            writer.close().await.map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .write(&result)
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
+            writer
+                .close()
+                .await
+                .map_err(|e| IIIError::Handler(e.to_string()))?;
 
             Ok(Value::Null)
         }
     });
 
     let _trigger = iii
-        .register_trigger("http", "test.api.form.multipart.rs", json!({
-            "api_path": "test/rs/form/multipart",
-            "http_method": "POST",
-        }))
+        .register_trigger(
+            "http",
+            "test.api.form.multipart.rs",
+            json!({
+                "api_path": "test/rs/form/multipart",
+                "http_method": "POST",
+            }),
+        )
         .expect("register trigger");
 
     settle().await;

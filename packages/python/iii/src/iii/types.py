@@ -206,7 +206,7 @@ def is_channel_ref(value: Any) -> bool:
     """Check if a value looks like a StreamChannelRef."""
     return (
         isinstance(value, dict)
-        and "channel_id" in value
-        and "access_key" in value
-        and "direction" in value
+        and isinstance(value.get("channel_id"), str)
+        and isinstance(value.get("access_key"), str)
+        and value.get("direction") in {"read", "write"}
     )

@@ -726,21 +726,27 @@ impl III {
     ///
     /// Returns a `Channel` with writer, reader, and their serializable refs
     /// that can be passed as fields in invocation data to other functions.
-    pub async fn create_channel(
-        &self,
-        buffer_size: Option<usize>,
-    ) -> Result<Channel, IIIError> {
+    pub async fn create_channel(&self, buffer_size: Option<usize>) -> Result<Channel, IIIError> {
         let result = self
-            .call("engine::channels::create", serde_json::json!({ "buffer_size": buffer_size }))
+            .call(
+                "engine::channels::create",
+                serde_json::json!({ "buffer_size": buffer_size }),
+            )
             .await?;
 
         let writer_ref: StreamChannelRef = serde_json::from_value(
-            result.get("writer").cloned().unwrap_or_default(),
+            result
+                .get("writer")
+                .cloned()
+                .ok_or_else(|| IIIError::Serde("missing 'writer' in channel response".into()))?,
         )
         .map_err(|e| IIIError::Serde(e.to_string()))?;
 
         let reader_ref: StreamChannelRef = serde_json::from_value(
-            result.get("reader").cloned().unwrap_or_default(),
+            result
+                .get("reader")
+                .cloned()
+                .ok_or_else(|| IIIError::Serde("missing 'reader' in channel response".into()))?,
         )
         .map_err(|e| IIIError::Serde(e.to_string()))?;
 

@@ -378,20 +378,22 @@ class III:
         except ImportError:
             return await handler(data), None
 
-    def _resolve_channels(self, data: dict[str, Any]) -> dict[str, Any]:
+    def _resolve_channels(self, data: Any) -> Any:
         """Recursively resolve StreamChannelRef objects into ChannelReader/ChannelWriter instances."""
-        resolved: dict[str, Any] = {}
-        for name, value in data.items():
-            if is_channel_ref(value):
-                if value["direction"] == "read":
-                    resolved[name] = ChannelReader(self._address, StreamChannelRef(**value))
-                else:
-                    resolved[name] = ChannelWriter(self._address, StreamChannelRef(**value))
-            elif isinstance(value, dict):
-                resolved[name] = self._resolve_channels(value)
-            else:
-                resolved[name] = value
-        return resolved
+        if is_channel_ref(data):
+            ref = StreamChannelRef(**data)
+            return (
+                ChannelReader(self._address, ref)
+                if ref.direction == "read"
+                else ChannelWriter(self._address, ref)
+            )
+        if isinstance(data, dict):
+            return {k: self._resolve_channels(v) for k, v in data.items()}
+        if isinstance(data, list):
+            return [self._resolve_channels(v) for v in data]
+        if isinstance(data, tuple):
+            return tuple(self._resolve_channels(v) for v in data)
+        return data
 
     async def _handle_invoke(
         self,
@@ -415,7 +417,19 @@ class III:
                 )
             return
 
-        resolved_data = self._resolve_channels(data) if isinstance(data, dict) else data
+        try:
+            resolved_data = self._resolve_channels(data)
+        except Exception as e:
+            log.exception("Failed to resolve channel refs")
+            if invocation_id:
+                await self._send(
+                    InvocationResultMessage(
+                        invocation_id=invocation_id,
+                        function_id=path,
+                        error={"code": "invocation_failed", "message": str(e)},
+                    )
+                )
+            return
 
         if not invocation_id:
             task = asyncio.create_task(
@@ -425,7 +439,12 @@ class III:
             return
 
         try:
-            result, response_traceparent = await self._invoke_with_context(func.handler, resolved_data, traceparent, baggage)
+            result, response_traceparent = await self._invoke_with_context(
+                func.handler,
+                resolved_data,
+                traceparent,
+                baggage,
+            )
             await self._send(
                 InvocationResultMessage(
                     invocation_id=invocation_id,

@@ -58,27 +58,29 @@ describe('Data Channels', () => {
 
     await sleep(300)
 
-    const records: Record[] = [
-      { name: 'cpu_usage', value: 72 },
-      { name: 'memory_mb', value: 2048 },
-      { name: 'disk_iops', value: 340 },
-      { name: 'network_mbps', value: 95 },
-      { name: 'latency_ms', value: 12 },
-    ]
+    try {
+      const records: Record[] = [
+        { name: 'cpu_usage', value: 72 },
+        { name: 'memory_mb', value: 2048 },
+        { name: 'disk_iops', value: 340 },
+        { name: 'network_mbps', value: 95 },
+        { name: 'latency_ms', value: 12 },
+      ]
 
-    // biome-ignore lint/suspicious/noExplicitAny: test code
-    const result = await iii.call<{ records: Record[] }, any>('test.data.sender', { records })
+      // biome-ignore lint/suspicious/noExplicitAny: test code
+      const result = await iii.call<{ records: Record[] }, any>('test.data.sender', { records })
 
-    expect(result.label).toBe('metrics-batch')
-    expect(result.messages).toHaveLength(5)
-    expect(result.messages).toContainEqual({ type: 'stat', key: 'count', value: 5 })
-    expect(result.messages).toContainEqual({ type: 'stat', key: 'sum', value: 2567 })
-    expect(result.messages).toContainEqual({ type: 'stat', key: 'average', value: 513.4 })
-    expect(result.messages).toContainEqual({ type: 'stat', key: 'min', value: 12 })
-    expect(result.messages).toContainEqual({ type: 'stat', key: 'max', value: 2048 })
-
-    sender.unregister()
-    processor.unregister()
+      expect(result.label).toBe('metrics-batch')
+      expect(result.messages).toHaveLength(5)
+      expect(result.messages).toContainEqual({ type: 'stat', key: 'count', value: 5 })
+      expect(result.messages).toContainEqual({ type: 'stat', key: 'sum', value: 2567 })
+      expect(result.messages).toContainEqual({ type: 'stat', key: 'average', value: 513.4 })
+      expect(result.messages).toContainEqual({ type: 'stat', key: 'min', value: 12 })
+      expect(result.messages).toContainEqual({ type: 'stat', key: 'max', value: 2048 })
+    } finally {
+      sender.unregister()
+      processor.unregister()
+    }
   })
 
   it('should create a channel and stream data from worker to coordinator', async () => {
@@ -173,28 +175,30 @@ describe('Data Channels', () => {
 
     await sleep(300)
 
-    const text = 'The quick brown fox jumps over the lazy dog and then runs around the park'
+    try {
+      const text = 'The quick brown fox jumps over the lazy dog and then runs around the park'
 
-    // biome-ignore lint/suspicious/noExplicitAny: test code
-    const result = await iii.call<{ text: string; chunkSize: number }, any>('test.stream.coordinator', {
-      text,
-      chunkSize: 10,
-    })
+      // biome-ignore lint/suspicious/noExplicitAny: test code
+      const result = await iii.call<{ text: string; chunkSize: number }, any>('test.stream.coordinator', {
+        text,
+        chunkSize: 10,
+      })
 
-    const progressMessages = result.messages.filter((m: { type: string }) => m.type === 'progress')
-    const completeMessage = result.messages.find((m: { type: string }) => m.type === 'complete')
+      const progressMessages = result.messages.filter((m: { type: string }) => m.type === 'progress')
+      const completeMessage = result.messages.find((m: { type: string }) => m.type === 'complete')
 
-    expect(progressMessages.length).toBeGreaterThan(0)
-    expect(completeMessage).toBeDefined()
-    expect(completeMessage.word_count).toBe(text.split(/\s+/).length)
+      expect(progressMessages.length).toBeGreaterThan(0)
+      expect(completeMessage).toBeDefined()
+      expect(completeMessage.word_count).toBe(text.split(/\s+/).length)
 
-    expect(result.binaryResult.total).toBe(text.split(/\s+/).length)
-    expect(result.binaryResult.words).toHaveLength(5)
-    expect(result.binaryResult.words).toEqual(['The', 'quick', 'brown', 'fox', 'jumps'])
+      expect(result.binaryResult.total).toBe(text.split(/\s+/).length)
+      expect(result.binaryResult.words).toHaveLength(5)
+      expect(result.binaryResult.words).toEqual(['The', 'quick', 'brown', 'fox', 'jumps'])
 
-    expect(result.workerResult.status).toBe('done')
-
-    coordinator.unregister()
-    worker.unregister()
+      expect(result.workerResult.status).toBe('done')
+    } finally {
+      coordinator.unregister()
+      worker.unregister()
+    }
   })
 })

@@ -47,5 +47,11 @@ export const http = (callback: (req: HttpRequest, res: HttpResponse) => Promise<
 }
 
 export const isChannelRef = (value: unknown): value is StreamChannelRef => {
-  return typeof value === 'object' && value !== null && 'channel_id' in value && 'access_key' in value && 'direction' in value
+  if (typeof value !== 'object' || value === null) return false
+  const maybe = value as Partial<StreamChannelRef>
+  return (
+    typeof maybe.channel_id === 'string' &&
+    typeof maybe.access_key === 'string' &&
+    (maybe.direction === 'read' || maybe.direction === 'write')
+  )
 }

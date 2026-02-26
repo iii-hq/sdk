@@ -8,7 +8,7 @@ import type {
 } from './iii-types'
 import type { TriggerHandler } from './triggers'
 import type { IStream } from './stream'
-import { ChannelReader, ChannelWriter } from './channels'
+import type { ChannelReader, ChannelWriter } from './channels'
 
 // biome-ignore lint/suspicious/noExplicitAny: generic defaults require any for contravariant compatibility
 export type RemoteFunctionHandler<TInput = any, TOutput = any> = (data: TInput) => Promise<TOutput>
@@ -126,11 +126,6 @@ export interface ISdk {
    */
   triggerVoid<TInput>(function_id: string, data: TInput): void
 
-  /**
-   * Lists all registered functions.
-   */
-  listFunctions(): Promise<FunctionInfo[]>
-
   call<TInput, TOutput>(function_id: string, data: TInput, timeoutMs?: number): Promise<TOutput>
 
   callVoid<TInput>(function_id: string, data: TInput): void
@@ -234,7 +229,7 @@ export type HttpResponse = {
 }
 
 export type HttpRequest<TBody = unknown> = Omit<InternalHttpRequest<TBody>, 'response'>
-export type ApiRequest = HttpRequest
+export type ApiRequest<TBody = unknown> = HttpRequest<TBody>
 
 export type ApiResponse<
   TStatus extends number = number,

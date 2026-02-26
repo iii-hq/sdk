@@ -62,7 +62,7 @@ class ChannelWriter:
             loop = asyncio.get_running_loop()
             loop.create_task(self._send_message_async(msg))
         except RuntimeError:
-            pass
+            asyncio.run(self._send_message_async(msg))
 
     async def _send_message_async(self, msg: str) -> None:
         ws = await self._ensure_connected()
@@ -78,7 +78,7 @@ class ChannelWriter:
             loop = asyncio.get_running_loop()
             loop.create_task(self.close_async())
         except RuntimeError:
-            pass
+            asyncio.run(self.close_async())
 
     async def close_async(self) -> None:
         if self._ws is not None and self._connected:
@@ -118,7 +118,10 @@ class ChannelReader:
                     yield message
                 else:
                     for cb in self._message_callbacks:
-                        cb(message)
+                        try:
+                            cb(message)
+                        except Exception:
+                            log.exception("Error in channel message callback")
         except websockets.ConnectionClosed:
             pass
 

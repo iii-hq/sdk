@@ -1,5 +1,6 @@
 import type {
   FunctionInfo,
+  HttpInvocationConfig,
   RegisterFunctionMessage,
   RegisterServiceMessage,
   RegisterTriggerMessage,
@@ -104,6 +105,14 @@ export interface ISdk {
    * @returns A function object that can be used to invoke the function
    */
   registerFunction(func: RegisterFunctionInput, handler: RemoteFunctionHandler): FunctionRef
+
+  /**
+   * Registers an HTTP external function (Lambda, Cloudflare Workers, etc.). The engine invokes the URL when triggered.
+   * @param id - Function path (use :: for namespacing, e.g. external::my_lambda)
+   * @param config - HTTP endpoint config (url, method, timeout_ms, headers, auth)
+   * @returns A function ref for unregistering
+   */
+  registerHttpFunction(id: string, config: HttpInvocationConfig): FunctionRef
 
   /**
    * Invokes a function.

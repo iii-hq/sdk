@@ -53,6 +53,19 @@ export type RegisterServiceMessage = {
   parent_service_id?: string
 }
 
+export type HttpAuthConfig =
+  | { type: 'hmac'; secret_key: string }
+  | { type: 'bearer'; token_key: string }
+  | { type: 'api_key'; header: string; value_key: string }
+
+export type HttpInvocationConfig = {
+  url: string
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  timeout_ms?: number
+  headers?: Record<string, string>
+  auth?: HttpAuthConfig
+}
+
 export type RegisterFunctionFormat = {
   name: string
   /**
@@ -80,7 +93,7 @@ export type RegisterFunctionFormat = {
 export type RegisterFunctionMessage = {
   message_type: MessageType.RegisterFunction
   /**
-   * The path of the function
+   * The path of the function (use :: for namespacing, e.g. external::my_lambda)
    */
   id: string
   /**
@@ -96,6 +109,10 @@ export type RegisterFunctionMessage = {
    */
   response_format?: RegisterFunctionFormat
   metadata?: Record<string, unknown>
+  /**
+   * HTTP invocation config for external HTTP functions (Lambda, Cloudflare Workers, etc.)
+   */
+  invocation?: HttpInvocationConfig
 }
 
 export type InvokeFunctionMessage = {

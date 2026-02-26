@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable
+from typing import Any, AsyncIterator, Callable
 from urllib.parse import quote
 
 import websockets
@@ -109,7 +109,7 @@ class ChannelReader:
     def on_message(self, callback: Callable[[str], Any]) -> None:
         self._message_callbacks.append(callback)
 
-    async def __aiter__(self):
+    async def __aiter__(self) -> AsyncIterator[bytes]:
         """Async iterator that yields binary chunks and dispatches text messages to callbacks."""
         ws = await self._ensure_connected()
         try:

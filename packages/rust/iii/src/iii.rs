@@ -143,6 +143,7 @@ impl Default for WorkerMetadata {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum Outbound {
     Message(Message),
     Shutdown,

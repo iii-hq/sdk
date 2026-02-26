@@ -302,7 +302,7 @@ mod tests {
             }),
         };
 
-        let serialized = serde_json::to_value(&msg.to_message()).unwrap();
+        let serialized = serde_json::to_value(msg.to_message()).unwrap();
         assert_eq!(serialized["type"], "registerfunction");
         assert_eq!(serialized["id"], "external::my_lambda");
         assert!(serialized["invocation"].is_object());

@@ -2,9 +2,9 @@
 
 import logging
 
+from .channels import ChannelReader, ChannelWriter
 from .context import Context, get_context, with_context
 from .iii import III, ConnectionStateCallback, FunctionRef, IIIConnectionState, InitOptions, ReconnectionConfig
-from .channels import ChannelReader, ChannelWriter
 from .iii_types import FunctionInfo, StreamChannelRef, WorkerInfo, WorkerStatus
 from .logger import Logger
 from .stream import (

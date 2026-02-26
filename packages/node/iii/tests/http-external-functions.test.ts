@@ -102,14 +102,20 @@ class WebhookProbe {
     }
 
     return new Promise<CapturedWebhook>((resolve, reject) => {
+      const waiter = (payload: CapturedWebhook) => {
+        clearTimeout(timeout)
+        const idx = this.waiters.indexOf(waiter)
+        if (idx >= 0) this.waiters.splice(idx, 1)
+        resolve(payload)
+      }
+
       const timeout = setTimeout(() => {
+        const idx = this.waiters.indexOf(waiter)
+        if (idx >= 0) this.waiters.splice(idx, 1)
         reject(new Error(`Timeout waiting for webhook after ${timeoutMs}ms`))
       }, timeoutMs)
 
-      this.waiters.push(payload => {
-        clearTimeout(timeout)
-        resolve(payload)
-      })
+      this.waiters.push(waiter)
     })
   }
 }

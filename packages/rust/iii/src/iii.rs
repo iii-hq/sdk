@@ -37,9 +37,9 @@ use crate::{
     error::IIIError,
     logger::Logger,
     protocol::{
-        ErrorBody, HttpInvocationConfig, Message, RegisterFunctionMessage,
-        RegisterServiceMessage, RegisterTriggerMessage, RegisterTriggerTypeMessage,
-        UnregisterTriggerMessage, UnregisterTriggerTypeMessage,
+        ErrorBody, HttpInvocationConfig, Message, RegisterFunctionMessage, RegisterServiceMessage,
+        RegisterTriggerMessage, RegisterTriggerTypeMessage, UnregisterTriggerMessage,
+        UnregisterTriggerTypeMessage,
     },
     triggers::{Trigger, TriggerConfig, TriggerHandler},
     types::{Channel, RemoteFunctionData, RemoteFunctionHandler, RemoteTriggerTypeData},
@@ -401,6 +401,17 @@ impl III {
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = Result<Value, IIIError>> + Send + 'static,
     {
+        if self
+            .inner
+            .http_functions
+            .lock_or_recover()
+            .contains_key(&message.id)
+        {
+            panic!(
+                "function id '{}' already registered as HTTP function",
+                message.id
+            );
+        }
         let function_id = message.id.clone();
 
         let user_handler = Arc::new(move |input: Value| Box::pin(handler(input)));
@@ -441,6 +452,18 @@ impl III {
                 message: "id is required".into(),
             });
         }
+        if self.inner.functions.lock_or_recover().contains_key(&id)
+            || self
+                .inner
+                .http_functions
+                .lock_or_recover()
+                .contains_key(&id)
+        {
+            return Err(IIIError::Remote {
+                code: "duplicate_id".into(),
+                message: "function id already registered".into(),
+            });
+        }
 
         let message = RegisterFunctionMessage {
             id: id.clone(),
@@ -460,16 +483,17 @@ impl III {
         let iii = self.clone();
         let unregister_id = id.clone();
         let unregister_fn = Arc::new(move || {
-            let _ = iii.inner.http_functions.lock_or_recover().remove(&unregister_id);
+            let _ = iii
+                .inner
+                .http_functions
+                .lock_or_recover()
+                .remove(&unregister_id);
             let _ = iii.send_message(Message::UnregisterFunction {
                 id: unregister_id.clone(),
             });
         });
 
-        Ok(HttpFunctionRef {
-            id,
-            unregister_fn,
-        })
+        Ok(HttpFunctionRef { id, unregister_fn })
     }
 
     pub fn register_service(&self, id: impl Into<String>, description: Option<String>) {

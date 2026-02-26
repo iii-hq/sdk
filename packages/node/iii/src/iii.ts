@@ -192,6 +192,9 @@ class Sdk implements ISdk {
     if (!message.id || message.id.trim() === '') {
       throw new Error('id is required')
     }
+    if (this.httpFunctions.has(message.id)) {
+      throw new Error(`function id already registered: ${message.id}`)
+    }
 
     this.sendMessage(MessageType.RegisterFunction, message, true)
     this.functions.set(message.id, {
@@ -235,6 +238,9 @@ class Sdk implements ISdk {
   registerHttpFunction = (id: string, config: HttpInvocationConfig): FunctionRef => {
     if (!id || id.trim() === '') {
       throw new Error('id is required')
+    }
+    if (this.functions.has(id) || this.httpFunctions.has(id)) {
+      throw new Error(`function id already registered: ${id}`)
     }
 
     const message: RegisterFunctionMessage = {

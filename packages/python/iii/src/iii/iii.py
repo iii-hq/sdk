@@ -563,6 +563,8 @@ class III:
     ) -> FunctionRef:
         if not path or not path.strip():
             raise ValueError("id is required")
+        if path in self._http_functions:
+            raise ValueError(f"function id '{path}' already registered as HTTP function")
 
         msg = RegisterFunctionMessage(id=path, description=description)
         self._send_if_connected(msg)
@@ -583,6 +585,8 @@ class III:
     def register_http_function(self, id: str, config: HttpInvocationConfig) -> FunctionRef:
         if not id or not id.strip():
             raise ValueError("id is required")
+        if id in self._functions or id in self._http_functions:
+            raise ValueError(f"function id '{id}' already registered")
 
         msg = RegisterFunctionMessage(
             id=id,

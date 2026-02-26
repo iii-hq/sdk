@@ -17,9 +17,17 @@ pub enum HttpMethod {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum HttpAuthConfig {
-    Hmac { secret_key: String },
-    Bearer { token_key: String },
-    ApiKey { header: String, value_key: String },
+    Hmac {
+        secret_key: String,
+    },
+    Bearer {
+        token_key: String,
+    },
+    #[serde(rename = "api_key")]
+    ApiKey {
+        header: String,
+        value_key: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -298,7 +306,10 @@ mod tests {
         assert_eq!(serialized["type"], "registerfunction");
         assert_eq!(serialized["id"], "external::my_lambda");
         assert!(serialized["invocation"].is_object());
-        assert_eq!(serialized["invocation"]["url"], "https://example.com/invoke");
+        assert_eq!(
+            serialized["invocation"]["url"],
+            "https://example.com/invoke"
+        );
         assert_eq!(serialized["invocation"]["method"], "POST");
     }
 }

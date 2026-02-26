@@ -239,7 +239,7 @@ class Sdk implements ISdk {
     const result = await this.call<
       { buffer_size?: number },
       { writer: StreamChannelRef; reader: StreamChannelRef }
-    >('channels::create', { buffer_size: bufferSize })
+    >('engine::channels::create', { buffer_size: bufferSize })
 
     return {
       writer: new ChannelWriter(this.address, result.writer),

@@ -235,7 +235,7 @@ async fn download_pdf_streaming() {
             let refs = iii_sdk::extract_channel_refs(&input);
             let writer_ref = refs
                 .iter()
-                .find(|(_, r)| matches!(r.direction, iii_sdk::StreamDirection::Write))
+                .find(|(_, r)| matches!(r.direction, iii_sdk::ChannelDirection::Write))
                 .map(|(_, r)| r.clone())
                 .expect("missing writer ref");
 
@@ -311,13 +311,13 @@ async fn upload_pdf_streaming() {
 
             let writer_ref = refs
                 .iter()
-                .find(|(_, r)| matches!(r.direction, iii_sdk::StreamDirection::Write))
+                .find(|(_, r)| matches!(r.direction, iii_sdk::ChannelDirection::Write))
                 .map(|(_, r)| r.clone())
                 .expect("missing writer ref");
 
             let reader_ref = refs
                 .iter()
-                .find(|(k, r)| k.contains("request_body") && matches!(r.direction, iii_sdk::StreamDirection::Read))
+                .find(|(k, r)| k.contains("request_body") && matches!(r.direction, iii_sdk::ChannelDirection::Read))
                 .map(|(_, r)| r.clone())
                 .expect("missing reader ref");
 
@@ -395,7 +395,7 @@ async fn sse_streaming() {
             let refs = iii_sdk::extract_channel_refs(&input);
             let writer_ref = refs
                 .iter()
-                .find(|(_, r)| matches!(r.direction, iii_sdk::StreamDirection::Write))
+                .find(|(_, r)| matches!(r.direction, iii_sdk::ChannelDirection::Write))
                 .map(|(_, r)| r.clone())
                 .expect("missing writer ref");
 
@@ -500,13 +500,13 @@ async fn urlencoded_form_data() {
 
             let writer_ref = refs
                 .iter()
-                .find(|(_, r)| matches!(r.direction, iii_sdk::StreamDirection::Write))
+                .find(|(_, r)| matches!(r.direction, iii_sdk::ChannelDirection::Write))
                 .map(|(_, r)| r.clone())
                 .expect("missing writer ref");
 
             let reader_ref = refs
                 .iter()
-                .find(|(k, r)| k.contains("request_body") && matches!(r.direction, iii_sdk::StreamDirection::Read))
+                .find(|(k, r)| k.contains("request_body") && matches!(r.direction, iii_sdk::ChannelDirection::Read))
                 .map(|(_, r)| r.clone())
                 .expect("missing reader ref");
 
@@ -615,13 +615,13 @@ async fn multipart_form_data() {
 
             let writer_ref = refs
                 .iter()
-                .find(|(_, r)| matches!(r.direction, iii_sdk::StreamDirection::Write))
+                .find(|(_, r)| matches!(r.direction, iii_sdk::ChannelDirection::Write))
                 .map(|(_, r)| r.clone())
                 .expect("missing writer ref");
 
             let reader_ref = refs
                 .iter()
-                .find(|(k, r)| k.contains("request_body") && matches!(r.direction, iii_sdk::StreamDirection::Read))
+                .find(|(k, r)| k.contains("request_body") && matches!(r.direction, iii_sdk::ChannelDirection::Read))
                 .map(|(_, r)| r.clone())
                 .expect("missing reader ref");
 

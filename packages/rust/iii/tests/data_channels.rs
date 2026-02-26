@@ -32,7 +32,7 @@ async fn stream_data_from_sender_to_processor() {
             let refs = iii_sdk::extract_channel_refs(&input);
             let reader_ref = refs
                 .iter()
-                .find(|(k, r)| k == "reader" && matches!(r.direction, iii_sdk::StreamDirection::Read))
+                .find(|(k, r)| k == "reader" && matches!(r.direction, iii_sdk::ChannelDirection::Read))
                 .map(|(_, r)| r.clone())
                 .expect("missing reader channel ref");
 
@@ -146,13 +146,13 @@ async fn bidirectional_streaming() {
 
             let reader_ref = refs
                 .iter()
-                .find(|(k, r)| k == "reader" && matches!(r.direction, iii_sdk::StreamDirection::Read))
+                .find(|(k, r)| k == "reader" && matches!(r.direction, iii_sdk::ChannelDirection::Read))
                 .map(|(_, r)| r.clone())
                 .expect("missing reader");
 
             let writer_ref = refs
                 .iter()
-                .find(|(k, r)| k == "writer" && matches!(r.direction, iii_sdk::StreamDirection::Write))
+                .find(|(k, r)| k == "writer" && matches!(r.direction, iii_sdk::ChannelDirection::Write))
                 .map(|(_, r)| r.clone())
                 .expect("missing writer");
 

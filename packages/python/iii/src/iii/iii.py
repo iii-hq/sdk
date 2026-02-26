@@ -623,7 +623,7 @@ class III:
         Args:
             buffer_size: Optional buffer size for the channel (default: 64).
         """
-        result = await self.call("channels::create", {"buffer_size": buffer_size})
+        result = await self.call("engine::channels::create", {"buffer_size": buffer_size})
         writer_ref = StreamChannelRef(**result["writer"])
         reader_ref = StreamChannelRef(**result["reader"])
         return Channel(

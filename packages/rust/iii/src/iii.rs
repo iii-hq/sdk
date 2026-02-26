@@ -731,7 +731,7 @@ impl III {
         buffer_size: Option<usize>,
     ) -> Result<Channel, IIIError> {
         let result = self
-            .call("channels::create", serde_json::json!({ "buffer_size": buffer_size }))
+            .call("engine::channels::create", serde_json::json!({ "buffer_size": buffer_size }))
             .await?;
 
         let writer_ref: StreamChannelRef = serde_json::from_value(

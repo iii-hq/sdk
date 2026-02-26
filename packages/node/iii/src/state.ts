@@ -9,7 +9,7 @@ export type StateSetInput = {
   scope: string
   key: string
   // biome-ignore lint/suspicious/noExplicitAny: any is fine here
-  data: any
+  value: any
 }
 
 export type StateDeleteInput = {

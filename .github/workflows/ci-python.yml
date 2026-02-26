@@ -47,5 +47,34 @@ jobs:
       - name: Type check
         run: uv run mypy src
 
+      - name: Start III Engine
+        run: |
+          curl -fsSl https://raw.githubusercontent.com/iii-hq/iii/main/install.sh | sh
+          which iii
+          iii -v
+
+          iii --config "${{ github.workspace }}/.github/engine-config/test-config.yml" > /tmp/iii-engine.log 2>&1 &
+          echo $! > /tmp/iii-engine.pid
+
+          echo "Waiting for III Engine on port 49134..."
+          for i in $(seq 1 30); do
+            if nc -z 127.0.0.1 49134 2>/dev/null; then
+              echo "III Engine is ready!"
+              exit 0
+            fi
+            echo "  attempt $i/30..."
+            sleep 2
+          done
+          echo "Engine did not become ready. Logs:"
+          tail -n 50 /tmp/iii-engine.log || true
+          exit 1
+
       - name: Run tests
         run: uv run pytest -q
+
+      - name: Stop III Engine
+        if: always()
+        run: |
+          if [ -f /tmp/iii-engine.pid ]; then
+            kill "$(cat /tmp/iii-engine.pid)" || true
+          fi

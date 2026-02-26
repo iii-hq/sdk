@@ -166,4 +166,262 @@ describe('HTTP external functions', () => {
       }
     }
   })
+
+  it('registers and unregisters an HTTP function', async () => {
+    await execute(async () => iii.listFunctions())
+
+    const webhookProbe = new WebhookProbe()
+    await webhookProbe.start()
+
+    const functionId = uniqueFunctionId('test::http_external::register_unregister')
+    let httpFn: { id: string; unregister(): void } | undefined
+
+    try {
+      httpFn = iii.registerHttpFunction(functionId, {
+        url: webhookProbe.url(),
+        method: 'POST',
+        timeout_ms: 3000,
+      })
+      await sleep(300)
+
+      const functionsAfterRegister = await execute(async () => iii.listFunctions())
+      const registered = functionsAfterRegister.find(f => f.function_id === functionId)
+      expect(registered).toBeDefined()
+
+      httpFn.unregister()
+      httpFn = undefined
+      await sleep(300)
+
+      const functionsAfterUnregister = await execute(async () => iii.listFunctions())
+      const unregistered = functionsAfterUnregister.find(f => f.function_id === functionId)
+      expect(unregistered).toBeUndefined()
+    } finally {
+      httpFn?.unregister()
+      await webhookProbe.close()
+    }
+  })
+
+  it('delivers events with custom headers to the webhook', async () => {
+    await execute(async () => iii.listFunctions())
+
+    const webhookProbe = new WebhookProbe()
+    await webhookProbe.start()
+
+    const functionId = uniqueFunctionId('test::http_external::custom_headers')
+    const topic = uniqueTopic('test.http_external.headers')
+    const payload = { msg: 'with-headers' }
+    let trigger: { unregister(): void } | undefined
+    let httpFn: { unregister(): void } | undefined
+
+    try {
+      httpFn = iii.registerHttpFunction(functionId, {
+        url: webhookProbe.url(),
+        method: 'POST',
+        timeout_ms: 3000,
+        headers: {
+          'X-Custom-Header': 'test-value',
+          'X-Another': '123',
+        },
+      })
+      await sleep(300)
+
+      trigger = iii.registerTrigger({
+        type: 'queue',
+        function_id: functionId,
+        config: { topic },
+      })
+      await sleep(300)
+
+      await execute(async () => iii.call('enqueue', { topic, data: payload }))
+
+      const webhook = await webhookProbe.waitForWebhook(7000)
+
+      expect(webhook.method).toBe('POST')
+      expect(webhook.body).toMatchObject(payload)
+      expect(webhook.headers['x-custom-header']).toBe('test-value')
+      expect(webhook.headers['x-another']).toBe('123')
+    } finally {
+      try {
+        trigger?.unregister()
+      } finally {
+        httpFn?.unregister()
+        await webhookProbe.close()
+      }
+    }
+  })
+
+  it('delivers events to multiple external functions on different topics', async () => {
+    await execute(async () => iii.listFunctions())
+
+    const webhookProbeA = new WebhookProbe()
+    const webhookProbeB = new WebhookProbe()
+    await webhookProbeA.start()
+    await webhookProbeB.start()
+
+    const functionIdA = uniqueFunctionId('test::http_external::multi_a')
+    const functionIdB = uniqueFunctionId('test::http_external::multi_b')
+    const topicA = uniqueTopic('test.http_external.multi_a')
+    const topicB = uniqueTopic('test.http_external.multi_b')
+    const payloadA = { source: 'topic-a', value: 1 }
+    const payloadB = { source: 'topic-b', value: 2 }
+
+    let triggerA: { unregister(): void } | undefined
+    let triggerB: { unregister(): void } | undefined
+    let httpFnA: { unregister(): void } | undefined
+    let httpFnB: { unregister(): void } | undefined
+
+    try {
+      httpFnA = iii.registerHttpFunction(functionIdA, {
+        url: webhookProbeA.url(),
+        method: 'POST',
+        timeout_ms: 3000,
+      })
+
+      httpFnB = iii.registerHttpFunction(functionIdB, {
+        url: webhookProbeB.url(),
+        method: 'POST',
+        timeout_ms: 3000,
+      })
+      await sleep(300)
+
+      triggerA = iii.registerTrigger({
+        type: 'queue',
+        function_id: functionIdA,
+        config: { topic: topicA },
+      })
+
+      triggerB = iii.registerTrigger({
+        type: 'queue',
+        function_id: functionIdB,
+        config: { topic: topicB },
+      })
+      await sleep(300)
+
+      await execute(async () => iii.call('enqueue', { topic: topicA, data: payloadA }))
+      await execute(async () => iii.call('enqueue', { topic: topicB, data: payloadB }))
+
+      const webhookA = await webhookProbeA.waitForWebhook(7000)
+      const webhookB = await webhookProbeB.waitForWebhook(7000)
+
+      expect(webhookA.method).toBe('POST')
+      expect(webhookA.body).toMatchObject(payloadA)
+
+      expect(webhookB.method).toBe('POST')
+      expect(webhookB.body).toMatchObject(payloadB)
+    } finally {
+      try {
+        triggerA?.unregister()
+        triggerB?.unregister()
+      } finally {
+        httpFnA?.unregister()
+        httpFnB?.unregister()
+        await webhookProbeA.close()
+        await webhookProbeB.close()
+      }
+    }
+  })
+
+  it('stops delivering events after unregister', async () => {
+    await execute(async () => iii.listFunctions())
+
+    const webhookProbe = new WebhookProbe()
+    await webhookProbe.start()
+
+    const functionId = uniqueFunctionId('test::http_external::stop_after_unregister')
+    const topic = uniqueTopic('test.http_external.stop')
+    const payloadBefore = { phase: 'before-unregister' }
+    const payloadAfter = { phase: 'after-unregister' }
+    let trigger: { unregister(): void } | undefined
+    let httpFn: { unregister(): void } | undefined
+
+    try {
+      httpFn = iii.registerHttpFunction(functionId, {
+        url: webhookProbe.url(),
+        method: 'POST',
+        timeout_ms: 3000,
+      })
+      await sleep(300)
+
+      trigger = iii.registerTrigger({
+        type: 'queue',
+        function_id: functionId,
+        config: { topic },
+      })
+      await sleep(300)
+
+      await execute(async () => iii.call('enqueue', { topic, data: payloadBefore }))
+
+      const webhookBefore = await webhookProbe.waitForWebhook(7000)
+      expect(webhookBefore.body).toMatchObject(payloadBefore)
+
+      trigger.unregister()
+      trigger = undefined
+      httpFn.unregister()
+      httpFn = undefined
+      await sleep(500)
+
+      await execute(async () => iii.call('enqueue', { topic, data: payloadAfter }))
+
+      let receivedAfterUnregister = false
+      try {
+        await webhookProbe.waitForWebhook(2000)
+        receivedAfterUnregister = true
+      } catch {
+        receivedAfterUnregister = false
+      }
+
+      expect(receivedAfterUnregister).toBe(false)
+    } finally {
+      try {
+        trigger?.unregister()
+      } finally {
+        httpFn?.unregister()
+        await webhookProbe.close()
+      }
+    }
+  })
+
+  it('delivers events using PUT method', async () => {
+    await execute(async () => iii.listFunctions())
+
+    const webhookProbe = new WebhookProbe()
+    await webhookProbe.start()
+
+    const functionId = uniqueFunctionId('test::http_external::put_method')
+    const topic = uniqueTopic('test.http_external.put')
+    const payload = { method_test: 'put', value: 42 }
+    let trigger: { unregister(): void } | undefined
+    let httpFn: { unregister(): void } | undefined
+
+    try {
+      httpFn = iii.registerHttpFunction(functionId, {
+        url: webhookProbe.url(),
+        method: 'PUT',
+        timeout_ms: 3000,
+      })
+      await sleep(300)
+
+      trigger = iii.registerTrigger({
+        type: 'queue',
+        function_id: functionId,
+        config: { topic },
+      })
+      await sleep(300)
+
+      await execute(async () => iii.call('enqueue', { topic, data: payload }))
+
+      const webhook = await webhookProbe.waitForWebhook(7000)
+
+      expect(webhook.method).toBe('PUT')
+      expect(webhook.url).toBe('/webhook')
+      expect(webhook.body).toMatchObject(payload)
+    } finally {
+      try {
+        trigger?.unregister()
+      } finally {
+        httpFn?.unregister()
+        await webhookProbe.close()
+      }
+    }
+  })
 })

@@ -517,12 +517,16 @@ class III:
         return Trigger(unregister)
 
     def register_function(
-        self, path: str, handler: RemoteFunctionHandler, description: str | None = None
+        self,
+        path: str,
+        handler: RemoteFunctionHandler,
+        description: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> FunctionRef:
         if not path or not path.strip():
             raise ValueError("id is required")
 
-        msg = RegisterFunctionMessage(id=path, description=description)
+        msg = RegisterFunctionMessage(id=path, description=description, metadata=metadata)
         self._send_if_connected(msg)
 
         async def wrapped(input_data: Any) -> Any:

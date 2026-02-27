@@ -94,25 +94,33 @@ describe('Data Channels', () => {
         for await (const chunk of reader.stream) {
           chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
           chunkCount++
-          writer.sendMessage(JSON.stringify({
-            type: 'progress',
-            chunks_received: chunkCount,
-          }))
+          writer.sendMessage(
+            JSON.stringify({
+              type: 'progress',
+              chunks_received: chunkCount,
+            }),
+          )
         }
 
         const fullData = Buffer.concat(chunks).toString('utf-8')
         const words = fullData.split(/\s+/).filter(Boolean)
 
-        writer.sendMessage(JSON.stringify({
-          type: 'complete',
-          word_count: words.length,
-          byte_count: Buffer.concat(chunks).length,
-        }))
+        writer.sendMessage(
+          JSON.stringify({
+            type: 'complete',
+            word_count: words.length,
+            byte_count: Buffer.concat(chunks).length,
+          }),
+        )
 
-        writer.stream.end(Buffer.from(JSON.stringify({
-          words: words.slice(0, 5),
-          total: words.length,
-        })))
+        writer.stream.end(
+          Buffer.from(
+            JSON.stringify({
+              words: words.slice(0, 5),
+              total: words.length,
+            }),
+          ),
+        )
 
         return { status: 'done' }
       },
@@ -125,7 +133,7 @@ describe('Data Channels', () => {
         const outputChannel = await iii.createChannel()
 
         const messages: unknown[] = []
-        outputChannel.reader.onMessage((msg) => {
+        outputChannel.reader.onMessage(msg => {
           messages.push(JSON.parse(msg))
         })
 
@@ -179,12 +187,17 @@ describe('Data Channels', () => {
       const text = 'The quick brown fox jumps over the lazy dog and then runs around the park'
 
       // biome-ignore lint/suspicious/noExplicitAny: test code
-      const result = await iii.call<{ text: string; chunkSize: number }, any>('test.stream.coordinator', {
-        text,
-        chunkSize: 10,
-      })
+      const result = await iii.call<{ text: string; chunkSize: number }, any>(
+        'test.stream.coordinator',
+        {
+          text,
+          chunkSize: 10,
+        },
+      )
 
-      const progressMessages = result.messages.filter((m: { type: string }) => m.type === 'progress')
+      const progressMessages = result.messages.filter(
+        (m: { type: string }) => m.type === 'progress',
+      )
       const completeMessage = result.messages.find((m: { type: string }) => m.type === 'complete')
 
       expect(progressMessages.length).toBeGreaterThan(0)

@@ -30,14 +30,15 @@ export function safeStringify(value: unknown): string {
   }
 }
 
-
 export const http = (callback: (req: HttpRequest, res: HttpResponse) => Promise<void>) => {
   return async (req: InternalHttpRequest) => {
     const { response, ...request } = req
 
     const httpResponse: HttpResponse = {
-      status: (status_code: number) => response.sendMessage(JSON.stringify({ type: 'set_status', status_code })),
-      headers: (headers: Record<string, string>) => response.sendMessage(JSON.stringify({ type: 'set_headers', headers })),
+      status: (status_code: number) =>
+        response.sendMessage(JSON.stringify({ type: 'set_status', status_code })),
+      headers: (headers: Record<string, string>) =>
+        response.sendMessage(JSON.stringify({ type: 'set_headers', headers })),
       stream: response.stream,
       close: () => response.close(),
     }

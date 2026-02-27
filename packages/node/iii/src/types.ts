@@ -210,7 +210,6 @@ export type Channel = {
   readerRef: StreamChannelRef
 }
 
-
 export type InternalHttpRequest<TBody = unknown> = {
   path_params: Record<string, string>
   query_params: Record<string, string | string[]>

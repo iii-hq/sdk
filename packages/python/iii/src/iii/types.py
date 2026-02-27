@@ -20,7 +20,7 @@ from .stream import IStream
 from .triggers import Trigger, TriggerHandler
 
 if TYPE_CHECKING:
-    from .channels import ChannelReader, ChannelWriter
+    from .channels import ChannelReader, ChannelWriter, WritableStream
 
 TInput = TypeVar("TInput")
 TOutput = TypeVar("TOutput")
@@ -181,6 +181,10 @@ class HttpResponse:
 
     async def headers(self, headers: dict[str, str]) -> None:
         await self._writer.send_message_async(json.dumps({"type": "set_headers", "headers": headers}))
+
+    @property
+    def stream(self) -> WritableStream:
+        return self._writer.stream
 
     @property
     def writer(self) -> ChannelWriter:

@@ -14,6 +14,8 @@ from .iii_types import StreamChannelRef
 
 log = logging.getLogger("iii.channels")
 
+MAX_FRAME_SIZE = 64 * 1024
+
 
 def build_channel_url(
     engine_ws_base: str,
@@ -25,6 +27,52 @@ def build_channel_url(
     return f"{base}/ws/channels/{channel_id}?key={quote(access_key)}&dir={direction}"
 
 
+class WritableStream:
+    """Writable stream interface backed by a ChannelWriter, matching Node.js Writable semantics."""
+
+    def __init__(self, writer: ChannelWriter) -> None:
+        self._writer = writer
+
+    def write(self, data: bytes) -> None:
+        """Fire-and-forget binary write. Queues an async write on the running loop."""
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._writer.write(data))
+        except RuntimeError:
+            asyncio.run(self._writer.write(data))
+
+    def end(self, data: bytes | None = None) -> None:
+        """Write optional final data and close the stream."""
+        try:
+            loop = asyncio.get_running_loop()
+            if data is not None:
+                async def _write_and_close() -> None:
+                    await self._writer.write(data)
+                    await self._writer.close_async()
+                loop.create_task(_write_and_close())
+            else:
+                loop.create_task(self._writer.close_async())
+        except RuntimeError:
+            if data is not None:
+                async def _write_and_close() -> None:
+                    await self._writer.write(data)
+                    await self._writer.close_async()
+                asyncio.run(_write_and_close())
+            else:
+                asyncio.run(self._writer.close_async())
+
+
+class ReadableStream:
+    """Readable stream interface backed by a ChannelReader, matching Node.js Readable semantics."""
+
+    def __init__(self, reader: ChannelReader) -> None:
+        self._reader = reader
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        async for chunk in self._reader:
+            yield chunk
+
+
 class ChannelWriter:
     """WebSocket-backed writer for streaming binary data and text messages."""
 
@@ -33,6 +81,7 @@ class ChannelWriter:
         self._ws: ClientConnection | None = None
         self._connected = False
         self._lock = asyncio.Lock()
+        self.stream = WritableStream(self)
 
     async def _ensure_connected(self) -> ClientConnection:
         if self._ws is not None and self._connected:
@@ -44,29 +93,23 @@ class ChannelWriter:
             self._connected = True
             return self._ws
 
-    _MAX_FRAME_SIZE = 64 * 1024
-
     async def write(self, data: bytes) -> None:
         ws = await self._ensure_connected()
-        if len(data) <= self._MAX_FRAME_SIZE:
+        if len(data) <= MAX_FRAME_SIZE:
             await ws.send(data)
         else:
             offset = 0
             while offset < len(data):
-                await ws.send(data[offset:offset + self._MAX_FRAME_SIZE])
-                offset += self._MAX_FRAME_SIZE
+                await ws.send(data[offset:offset + MAX_FRAME_SIZE])
+                offset += MAX_FRAME_SIZE
 
     def send_message(self, msg: str) -> None:
         """Fire-and-forget text message. Queues a coroutine on the running loop."""
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(self._send_message_async(msg))
+            loop.create_task(self.send_message_async(msg))
         except RuntimeError:
-            asyncio.run(self._send_message_async(msg))
-
-    async def _send_message_async(self, msg: str) -> None:
-        ws = await self._ensure_connected()
-        await ws.send(msg)
+            asyncio.run(self.send_message_async(msg))
 
     async def send_message_async(self, msg: str) -> None:
         ws = await self._ensure_connected()
@@ -95,6 +138,7 @@ class ChannelReader:
         self._connected = False
         self._lock = asyncio.Lock()
         self._message_callbacks: list[Callable[[str], Any]] = []
+        self.stream = ReadableStream(self)
 
     async def _ensure_connected(self) -> ClientConnection:
         if self._ws is not None and self._connected:

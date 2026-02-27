@@ -1,5 +1,5 @@
-import { StreamChannelRef } from './iii-types'
-import { HttpRequest, HttpResponse, InternalHttpRequest } from './types'
+import type { StreamChannelRef } from './iii-types'
+import type { HttpRequest, HttpResponse, InternalHttpRequest } from './types'
 
 /**
  * Safely stringify a value, handling circular references, BigInt, and other edge cases.

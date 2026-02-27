@@ -2,7 +2,7 @@
 
 import logging
 
-from .channels import ChannelReader, ChannelWriter
+from .channels import ChannelReader, ChannelWriter, ReadableStream, WritableStream
 from .context import Context, get_context, with_context
 from .iii import III, ConnectionStateCallback, FunctionRef, IIIConnectionState, InitOptions, ReconnectionConfig
 from .iii_types import FunctionInfo, StreamChannelRef, WorkerInfo, WorkerStatus
@@ -76,6 +76,8 @@ __all__ = [
     "Channel",
     "ChannelWriter",
     "ChannelReader",
+    "WritableStream",
+    "ReadableStream",
     "StreamChannelRef",
     "is_channel_ref",
     # SDK types

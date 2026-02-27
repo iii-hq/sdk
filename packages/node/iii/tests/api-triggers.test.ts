@@ -3,9 +3,9 @@ import * as path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { http, type HttpRequest, type ApiResponse, type ChannelReader, type ChannelWriter } from '../src'
+import { http, type ApiResponse, type HttpRequest } from '../src'
+import type { HttpResponse } from '../src/types'
 import { engineHttpUrl, execute, httpRequest, iii, sleep } from './utils'
-import { HttpResponse } from '../src/types'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pdfPath = path.join(__dirname, '..', '..', '..', '..', 'test-assets', 'handbook.pdf')
@@ -213,7 +213,7 @@ describe('API Triggers', () => {
       { id: 'test.api.upload.pdf' },
       http(async (req: HttpRequest, response: HttpResponse) => {
         const chunks: Buffer[] = []
-        
+
         response.status(200)
         response.headers({ 'content-type': 'application/json' })
 
@@ -246,11 +246,11 @@ describe('API Triggers', () => {
 
     expect(response.status).toBe(200)
 
-    const data = await response.json() as Record<string, unknown>
+    const data = (await response.json()) as Record<string, unknown>
 
     expect(data.received_size).toBe(originalPdf.length)
     expect(receivedBuffer).not.toBeNull()
-    expect(receivedBuffer.equals(originalPdf)).toEqual(originalPdf)
+    expect(receivedBuffer.equals(originalPdf)).toBe(true)
 
     fn.unregister()
     trigger.unregister()
@@ -266,12 +266,12 @@ describe('API Triggers', () => {
 
     const fn = iii.registerFunction(
       { id: 'test.api.sse' },
-      http(async (req: HttpRequest, response: HttpResponse) => {
+      http(async (_req: HttpRequest, response: HttpResponse) => {
         response.status(200)
         response.headers({
           'content-type': 'text/event-stream',
           'cache-control': 'no-cache',
-          'connection': 'keep-alive',
+          connection: 'keep-alive',
         })
 
         for (const event of events) {
@@ -352,11 +352,15 @@ describe('API Triggers', () => {
 
         response.status(200)
         response.headers({ 'content-type': 'application/json' })
-        response.stream.end(Buffer.from(JSON.stringify({
-          name: params.get('name'),
-          email: params.get('email'),
-          age: params.get('age'),
-        })))
+        response.stream.end(
+          Buffer.from(
+            JSON.stringify({
+              name: params.get('name'),
+              email: params.get('email'),
+              age: params.get('age'),
+            }),
+          ),
+        )
       }),
     )
 
@@ -384,7 +388,7 @@ describe('API Triggers', () => {
     })
 
     expect(response.status).toBe(200)
-    const data = await response.json() as Record<string, unknown>
+    const data = (await response.json()) as Record<string, unknown>
 
     expect(data.name).toBe('John Doe')
     expect(data.email).toBe('john@example.com')
@@ -418,13 +422,17 @@ describe('API Triggers', () => {
 
         response.status(200)
         response.headers({ 'content-type': 'application/json' })
-        response.stream.end(Buffer.from(JSON.stringify({
-          has_boundary: boundary.length > 0,
-          has_title: hasTitle,
-          has_description: hasDescription,
-          has_filename: hasFilename,
-          body_size: rawBody.length,
-        })))
+        response.stream.end(
+          Buffer.from(
+            JSON.stringify({
+              has_boundary: boundary.length > 0,
+              has_title: hasTitle,
+              has_description: hasDescription,
+              has_filename: hasFilename,
+              body_size: rawBody.length,
+            }),
+          ),
+        )
       }),
     )
 
@@ -450,7 +458,7 @@ describe('API Triggers', () => {
     })
 
     expect(response.status).toBe(200)
-    const data = await response.json() as Record<string, unknown>
+    const data = (await response.json()) as Record<string, unknown>
 
     expect(data.has_boundary).toBe(true)
     expect(data.has_title).toBe(true)

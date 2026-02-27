@@ -6,7 +6,10 @@ export class ChannelWriter {
   private static readonly FRAME_SIZE = 64 * 1024
   private ws: WebSocket | null = null
   private wsReady = false
-  private readonly pendingMessages: { data: Buffer | string; callback: (err?: Error | null) => void }[] = []
+  private readonly pendingMessages: {
+    data: Buffer | string
+    callback: (err?: Error | null) => void
+  }[] = []
   public readonly stream: Writable
   private readonly url: string
 
@@ -18,7 +21,7 @@ export class ChannelWriter {
         const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
         this.sendChunked(buf, callback)
       },
-      final: (callback) => {
+      final: callback => {
         if (!this.ws) {
           callback()
           return
@@ -49,7 +52,7 @@ export class ChannelWriter {
       this.pendingMessages.length = 0
     })
 
-    this.ws.on('error', (err) => {
+    this.ws.on('error', err => {
       this.stream.destroy(err)
     })
 
@@ -62,7 +65,7 @@ export class ChannelWriter {
 
   sendMessage(msg: string): void {
     this.ensureConnected()
-    this.sendRaw(msg, (err) => {
+    this.sendRaw(msg, err => {
       if (err) this.stream.destroy(err)
     })
   }
@@ -79,8 +82,16 @@ export class ChannelWriter {
   private sendChunked(data: Buffer, callback: (err?: Error | null) => void): void {
     let offset = 0
     const sendNext = (err?: Error | null): void => {
-      if (err) return callback(err)
-      if (offset >= data.length) return callback(null)
+      if (err) {
+        callback(err)
+        return
+      }
+
+      if (offset >= data.length) {
+        callback(null)
+        return
+      }
+
       const end = Math.min(offset + ChannelWriter.FRAME_SIZE, data.length)
       const part = data.subarray(offset, end)
       offset = end
@@ -92,7 +103,7 @@ export class ChannelWriter {
   private sendRaw(data: Buffer | string, callback: (err?: Error | null) => void): void {
     this.ensureConnected()
     if (this.wsReady && this.ws) {
-      this.ws.send(data, (err) => callback(err ?? null))
+      this.ws.send(data, err => callback(err ?? null))
     } else {
       this.pendingMessages.push({ data, callback })
     }
@@ -152,7 +163,7 @@ export class ChannelReader {
       if (!this.stream.destroyed) this.stream.push(null)
     })
 
-    this.ws.on('error', (err) => {
+    this.ws.on('error', err => {
       this.stream.destroy(err)
     })
   }

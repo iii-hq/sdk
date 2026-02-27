@@ -38,9 +38,6 @@ type WsReader = futures_util::stream::SplitStream<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 >;
 
-type MessageCallback = Box<dyn Fn(String) + Send + Sync>;
-type MessageCallbacks = Arc<Mutex<Vec<MessageCallback>>>;
-
 fn build_channel_url(
     engine_ws_base: &str,
     channel_id: &str,
@@ -104,10 +101,9 @@ impl ChannelWriter {
     pub async fn write(&self, data: &[u8]) -> Result<(), IIIError> {
         self.ensure_connected().await?;
         let mut guard = self.ws.lock().await;
-        if let Some(ws) = guard.as_mut() {
-            for chunk in data.chunks(Self::MAX_FRAME_SIZE) {
-                ws.send(WsMessage::Binary(chunk.to_vec().into())).await?;
-            }
+        let ws = guard.as_mut().ok_or(IIIError::NotConnected)?;
+        for chunk in data.chunks(Self::MAX_FRAME_SIZE) {
+            ws.send(WsMessage::Binary(chunk.to_vec().into())).await?;
         }
         Ok(())
     }
@@ -115,9 +111,8 @@ impl ChannelWriter {
     pub async fn send_message(&self, msg: &str) -> Result<(), IIIError> {
         self.ensure_connected().await?;
         let mut guard = self.ws.lock().await;
-        if let Some(ws) = guard.as_mut() {
-            ws.send(WsMessage::Text(msg.to_string().into())).await?;
-        }
+        let ws = guard.as_mut().ok_or(IIIError::NotConnected)?;
+        ws.send(WsMessage::Text(msg.to_string().into())).await?;
         Ok(())
     }
 
@@ -131,11 +126,14 @@ impl ChannelWriter {
     }
 }
 
+type MessageCallback = Box<dyn Fn(String) + Send + Sync>;
+type MessageCallbackList = Arc<Mutex<Vec<MessageCallback>>>;
+
 /// WebSocket-backed reader for streaming binary data and text messages.
 pub struct ChannelReader {
     url: String,
     ws: Arc<Mutex<Option<WsReader>>>,
-    message_callbacks: MessageCallbacks,
+    message_callbacks: MessageCallbackList,
 }
 
 impl ChannelReader {
@@ -176,11 +174,19 @@ impl ChannelReader {
     /// Returns `None` when the stream is closed.
     pub async fn next_binary(&self) -> Result<Option<Vec<u8>>, IIIError> {
         self.ensure_connected().await?;
-        let mut guard = self.ws.lock().await;
-        let reader = guard.as_mut().ok_or(IIIError::NotConnected)?;
 
         loop {
-            match reader.next().await {
+            let mut guard = self.ws.lock().await;
+            let mut reader = guard.take().ok_or(IIIError::NotConnected)?;
+            drop(guard);
+
+            let msg = reader.next().await;
+
+            let mut guard = self.ws.lock().await;
+            *guard = Some(reader);
+            drop(guard);
+
+            match msg {
                 Some(Ok(WsMessage::Binary(data))) => return Ok(Some(data.to_vec())),
                 Some(Ok(WsMessage::Text(text))) => {
                     let callbacks = self.message_callbacks.lock().await;

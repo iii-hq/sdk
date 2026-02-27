@@ -37,7 +37,7 @@ use crate::{
     error::IIIError,
     logger::Logger,
     protocol::{
-        ErrorBody, Message, RegisterFunctionMessage, RegisterServiceMessage,
+        ErrorBody, HttpInvocationConfig, Message, RegisterFunctionMessage, RegisterServiceMessage,
         RegisterTriggerMessage, RegisterTriggerTypeMessage, UnregisterTriggerMessage,
         UnregisterTriggerTypeMessage,
     },
@@ -143,6 +143,7 @@ impl Default for WorkerMetadata {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum Outbound {
     Message(Message),
     Shutdown,
@@ -172,6 +173,18 @@ fn inject_trace_headers() -> (Option<String>, Option<String>) {
 /// Callback function type for functions available events
 pub type FunctionsAvailableCallback = Arc<dyn Fn(Vec<FunctionInfo>) + Send + Sync>;
 
+#[derive(Clone)]
+pub struct HttpFunctionRef {
+    pub id: String,
+    unregister_fn: Arc<dyn Fn() + Send + Sync>,
+}
+
+impl HttpFunctionRef {
+    pub fn unregister(&self) {
+        (self.unregister_fn)();
+    }
+}
+
 struct IIIInner {
     address: String,
     outbound: mpsc::UnboundedSender<Outbound>,
@@ -180,6 +193,7 @@ struct IIIInner {
     started: AtomicBool,
     pending: Mutex<HashMap<Uuid, PendingInvocation>>,
     functions: Mutex<HashMap<String, RemoteFunctionData>>,
+    http_functions: Mutex<HashMap<String, RegisterFunctionMessage>>,
     trigger_types: Mutex<HashMap<String, RemoteTriggerTypeData>>,
     triggers: Mutex<HashMap<String, RegisterTriggerMessage>>,
     services: Mutex<HashMap<String, RegisterServiceMessage>>,
@@ -238,6 +252,7 @@ impl III {
             started: AtomicBool::new(false),
             pending: Mutex::new(HashMap::new()),
             functions: Mutex::new(HashMap::new()),
+            http_functions: Mutex::new(HashMap::new()),
             trigger_types: Mutex::new(HashMap::new()),
             triggers: Mutex::new(HashMap::new()),
             services: Mutex::new(HashMap::new()),
@@ -355,6 +370,7 @@ impl III {
             request_format: None,
             response_format: None,
             metadata: None,
+            invocation: None,
         };
 
         self.register_function_with(message, handler);
@@ -375,6 +391,7 @@ impl III {
             request_format: None,
             response_format: None,
             metadata: None,
+            invocation: None,
         };
 
         self.register_function_with(message, handler);
@@ -385,6 +402,17 @@ impl III {
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = Result<Value, IIIError>> + Send + 'static,
     {
+        if self
+            .inner
+            .http_functions
+            .lock_or_recover()
+            .contains_key(&message.id)
+        {
+            panic!(
+                "function id '{}' already registered as HTTP function",
+                message.id
+            );
+        }
         let function_id = message.id.clone();
 
         let user_handler = Arc::new(move |input: Value| Box::pin(handler(input)));
@@ -411,6 +439,62 @@ impl III {
             .lock_or_recover()
             .insert(message.id.clone(), data);
         let _ = self.send_message(message.to_message());
+    }
+
+    pub fn register_http_function(
+        &self,
+        id: impl Into<String>,
+        config: HttpInvocationConfig,
+    ) -> Result<HttpFunctionRef, IIIError> {
+        let id = id.into();
+        if id.trim().is_empty() {
+            return Err(IIIError::Remote {
+                code: "invalid_id".into(),
+                message: "id is required".into(),
+            });
+        }
+        if self.inner.functions.lock_or_recover().contains_key(&id)
+            || self
+                .inner
+                .http_functions
+                .lock_or_recover()
+                .contains_key(&id)
+        {
+            return Err(IIIError::Remote {
+                code: "duplicate_id".into(),
+                message: "function id already registered".into(),
+            });
+        }
+
+        let message = RegisterFunctionMessage {
+            id: id.clone(),
+            description: None,
+            request_format: None,
+            response_format: None,
+            metadata: None,
+            invocation: Some(config),
+        };
+
+        self.inner
+            .http_functions
+            .lock_or_recover()
+            .insert(id.clone(), message.clone());
+        let _ = self.send_message(message.to_message());
+
+        let iii = self.clone();
+        let unregister_id = id.clone();
+        let unregister_fn = Arc::new(move || {
+            let _ = iii
+                .inner
+                .http_functions
+                .lock_or_recover()
+                .remove(&unregister_id);
+            let _ = iii.send_message(Message::UnregisterFunction {
+                id: unregister_id.clone(),
+            });
+        });
+
+        Ok(HttpFunctionRef { id, unregister_fn })
     }
 
     pub fn register_service(&self, id: impl Into<String>, description: Option<String>) {
@@ -864,6 +948,10 @@ impl III {
             messages.push(function.message.to_message());
         }
 
+        for message in self.inner.http_functions.lock_or_recover().values() {
+            messages.push(message.to_message());
+        }
+
         for trigger in self.inner.triggers.lock_or_recover().values() {
             messages.push(trigger.to_message());
         }
@@ -1181,9 +1269,12 @@ impl III {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use serde_json::json;
 
     use super::*;
+    use crate::protocol::{HttpInvocationConfig, HttpMethod};
 
     #[test]
     fn register_trigger_unregister_removes_entry() {
@@ -1197,6 +1288,44 @@ mod tests {
         trigger.unregister();
 
         assert_eq!(iii.inner.triggers.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn register_http_function_stores_and_unregister_removes() {
+        let iii = III::new("ws://localhost:1234");
+        let config = HttpInvocationConfig {
+            url: "https://example.com/invoke".to_string(),
+            method: HttpMethod::Post,
+            timeout_ms: Some(30000),
+            headers: HashMap::new(),
+            auth: None,
+        };
+
+        let http_fn = iii
+            .register_http_function("external::my_lambda", config)
+            .unwrap();
+
+        assert_eq!(http_fn.id, "external::my_lambda");
+        assert_eq!(iii.inner.http_functions.lock().unwrap().len(), 1);
+
+        http_fn.unregister();
+
+        assert_eq!(iii.inner.http_functions.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn register_http_function_rejects_empty_id() {
+        let iii = III::new("ws://localhost:1234");
+        let config = HttpInvocationConfig {
+            url: "https://example.com/invoke".to_string(),
+            method: HttpMethod::Post,
+            timeout_ms: None,
+            headers: HashMap::new(),
+            auth: None,
+        };
+
+        let result = iii.register_http_function("", config);
+        assert!(result.is_err());
     }
 
     #[tokio::test]

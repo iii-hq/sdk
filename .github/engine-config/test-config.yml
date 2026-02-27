@@ -1,3 +1,4 @@
+port: 49134
 modules:
   - class: modules::stream::StreamModule
     config:
@@ -19,7 +20,7 @@ modules:
 
   - class: modules::api::RestApiModule
     config:
-      port: 3111
+      port: 3199
       host: 127.0.0.1
       default_timeout: 30000
       concurrency_request_limit: 1024
@@ -58,6 +59,15 @@ modules:
     config:
       adapter:
         class: modules::queue::BuiltinQueueAdapter
+
+  - class: modules::http_functions::HttpFunctionsModule
+    config:
+      security:
+        url_allowlist:
+          - localhost
+          - 127.0.0.1
+        block_private_ips: false
+        require_https: false
 
   - class: modules::pubsub::PubSubModule
     config:

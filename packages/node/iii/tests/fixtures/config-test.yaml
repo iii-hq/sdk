@@ -60,6 +60,15 @@ modules:
       adapter:
         class: modules::queue::BuiltinQueueAdapter
 
+  - class: modules::http_functions::HttpFunctionsModule
+    config:
+      security:
+        url_allowlist:
+          - localhost
+          - 127.0.0.1
+        block_private_ips: false
+        require_https: false
+
   - class: modules::cron::CronModule
     config:
       adapter:

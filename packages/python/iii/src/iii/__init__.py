@@ -5,7 +5,7 @@ import logging
 from .channels import ChannelReader, ChannelWriter, ReadableStream, WritableStream
 from .context import Context, get_context, with_context
 from .iii import III, ConnectionStateCallback, FunctionRef, IIIConnectionState, InitOptions, ReconnectionConfig
-from .iii_types import FunctionInfo, StreamChannelRef, WorkerInfo, WorkerStatus
+from .iii_types import FunctionInfo, HttpAuthConfig, HttpInvocationConfig, StreamChannelRef, WorkerInfo, WorkerStatus
 from .logger import Logger
 from .stream import (
     IStream,
@@ -82,6 +82,8 @@ __all__ = [
     "is_channel_ref",
     # SDK types
     "FunctionInfo",
+    "HttpAuthConfig",
+    "HttpInvocationConfig",
     "WorkerInfo",
     "WorkerStatus",
     # Stream types

@@ -17,12 +17,14 @@ pub use channels::{
 pub use context::{Context, get_context, with_context};
 pub use error::IIIError;
 pub use iii::{
-    FunctionInfo, FunctionsAvailableGuard, III, TriggerInfo, WorkerInfo, WorkerMetadata,
+    FunctionInfo, FunctionsAvailableGuard, HttpFunctionRef, III, TriggerInfo, WorkerInfo,
+    WorkerMetadata,
 };
 pub use logger::Logger;
 pub use protocol::{
-    ErrorBody, FunctionMessage, Message, RegisterFunctionMessage, RegisterServiceMessage,
-    RegisterTriggerMessage, RegisterTriggerTypeMessage,
+    ErrorBody, FunctionMessage, HttpAuthConfig, HttpInvocationConfig, HttpMethod, Message,
+    RegisterFunctionMessage, RegisterServiceMessage, RegisterTriggerMessage,
+    RegisterTriggerTypeMessage,
 };
 pub use stream::{Streams, UpdateBuilder};
 pub use triggers::{Trigger, TriggerConfig, TriggerHandler};

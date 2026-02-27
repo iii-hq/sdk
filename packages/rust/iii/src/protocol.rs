@@ -1,6 +1,51 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum HttpMethod {
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum HttpAuthConfig {
+    Hmac {
+        secret_key: String,
+    },
+    Bearer {
+        token_key: String,
+    },
+    #[serde(rename = "api_key")]
+    ApiKey {
+        header: String,
+        value_key: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HttpInvocationConfig {
+    pub url: String,
+    #[serde(default = "default_http_method")]
+    pub method: HttpMethod,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth: Option<HttpAuthConfig>,
+}
+
+fn default_http_method() -> HttpMethod {
+    HttpMethod::Post
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -39,6 +84,11 @@ pub enum Message {
         response_format: Option<Value>,
         #[serde(skip_serializing_if = "Option::is_none")]
         metadata: Option<Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        invocation: Option<HttpInvocationConfig>,
+    },
+    UnregisterFunction {
+        id: String,
     },
     InvokeFunction {
         invocation_id: Option<Uuid>,
@@ -147,6 +197,8 @@ pub struct RegisterFunctionMessage {
     pub response_format: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub invocation: Option<HttpInvocationConfig>,
 }
 
 impl RegisterFunctionMessage {
@@ -157,6 +209,7 @@ impl RegisterFunctionMessage {
             request_format: self.request_format.clone(),
             response_format: self.response_format.clone(),
             metadata: self.metadata.clone(),
+            invocation: self.invocation.clone(),
         }
     }
 }
@@ -210,6 +263,7 @@ mod tests {
             request_format: None,
             response_format: None,
             metadata: None,
+            invocation: None,
         };
 
         let message = msg.to_message();
@@ -227,5 +281,35 @@ mod tests {
         assert_eq!(serialized["type"], "registerfunction");
         assert_eq!(serialized["id"], "functions.echo");
         assert_eq!(serialized["description"], "Echo function");
+    }
+
+    #[test]
+    fn register_http_function_serializes_invocation() {
+        use super::{HttpInvocationConfig, HttpMethod};
+
+        let msg = RegisterFunctionMessage {
+            id: "external::my_lambda".to_string(),
+            description: None,
+            request_format: None,
+            response_format: None,
+            metadata: None,
+            invocation: Some(HttpInvocationConfig {
+                url: "https://example.com/invoke".to_string(),
+                method: HttpMethod::Post,
+                timeout_ms: Some(30000),
+                headers: HashMap::new(),
+                auth: None,
+            }),
+        };
+
+        let serialized = serde_json::to_value(msg.to_message()).unwrap();
+        assert_eq!(serialized["type"], "registerfunction");
+        assert_eq!(serialized["id"], "external::my_lambda");
+        assert!(serialized["invocation"].is_object());
+        assert_eq!(
+            serialized["invocation"]["url"],
+            "https://example.com/invoke"
+        );
+        assert_eq!(serialized["invocation"]["method"], "POST");
     }
 }

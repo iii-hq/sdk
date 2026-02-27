@@ -6,6 +6,35 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class HttpAuthHmac(BaseModel):
+    type: Literal["hmac"] = "hmac"
+    secret_key: str
+
+
+class HttpAuthBearer(BaseModel):
+    type: Literal["bearer"] = "bearer"
+    token_key: str
+
+
+class HttpAuthApiKey(BaseModel):
+    type: Literal["api_key"] = "api_key"
+    header: str
+    value_key: str
+
+
+HttpAuthConfig = HttpAuthHmac | HttpAuthBearer | HttpAuthApiKey
+
+
+class HttpInvocationConfig(BaseModel):
+    """Config for HTTP external function invocation."""
+
+    url: str
+    method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"] = "POST"
+    timeout_ms: int | None = None
+    headers: dict[str, str] | None = None
+    auth: HttpAuthConfig | None = None
+
+
 class MessageType(str, Enum):
     """Message types for iii communication."""
 
@@ -94,6 +123,7 @@ class RegisterFunctionMessage(BaseModel):
     request_format: RegisterFunctionFormat | None = Field(default=None)
     response_format: RegisterFunctionFormat | None = Field(default=None)
     metadata: dict[str, Any] | None = None
+    invocation: HttpInvocationConfig | None = None
     message_type: MessageType = Field(default=MessageType.REGISTER_FUNCTION, alias="type")
 
 

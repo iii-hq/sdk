@@ -18,6 +18,7 @@ from .channels import ChannelReader, ChannelWriter
 from .context import Context, with_context
 from .iii_types import (
     FunctionInfo,
+    HttpInvocationConfig,
     InvocationResultMessage,
     InvokeFunctionMessage,
     MessageType,
@@ -104,6 +105,7 @@ class III:
         self._options = options or InitOptions()
         self._ws: ClientConnection | None = None
         self._functions: dict[str, RemoteFunctionData] = {}
+        self._http_functions: dict[str, RegisterFunctionMessage] = {}
         self._services: dict[str, RegisterServiceMessage] = {}
         self._pending: dict[str, asyncio.Future[Any]] = {}
         self._triggers: dict[str, RegisterTriggerMessage] = {}
@@ -212,6 +214,8 @@ class III:
             await self._send(svc)
         for function_data in self._functions.values():
             await self._send(function_data.message)
+        for msg in self._http_functions.values():
+            await self._send(msg)
         for trigger in self._triggers.values():
             await self._send(trigger)
 
@@ -559,6 +563,8 @@ class III:
     ) -> FunctionRef:
         if not path or not path.strip():
             raise ValueError("id is required")
+        if path in self._http_functions:
+            raise ValueError(f"function id '{path}' already registered as HTTP function")
 
         msg = RegisterFunctionMessage(id=path, description=description)
         self._send_if_connected(msg)
@@ -575,6 +581,25 @@ class III:
             self._send_if_connected(UnregisterFunctionMessage(id=path))
 
         return FunctionRef(id=path, unregister=unregister)
+
+    def register_http_function(self, id: str, config: HttpInvocationConfig) -> FunctionRef:
+        if not id or not id.strip():
+            raise ValueError("id is required")
+        if id in self._functions or id in self._http_functions:
+            raise ValueError(f"function id '{id}' already registered")
+
+        msg = RegisterFunctionMessage(
+            id=id,
+            invocation=config,
+        )
+        self._send_if_connected(msg)
+        self._http_functions[id] = msg
+
+        def unregister() -> None:
+            self._http_functions.pop(id, None)
+            self._send_if_connected(UnregisterFunctionMessage(id=id))
+
+        return FunctionRef(id=id, unregister=unregister)
 
     def register_service(self, id: str, description: str | None = None, parent_id: str | None = None) -> None:
         msg = RegisterServiceMessage(id=id, description=description, parent_service_id=parent_id)

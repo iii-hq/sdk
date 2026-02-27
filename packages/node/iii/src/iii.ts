@@ -14,6 +14,7 @@ import {
 import {
   type IIIMessage,
   type FunctionInfo,
+  type HttpInvocationConfig,
   type InvocationResultMessage,
   type InvokeFunctionMessage,
   MessageType,
@@ -101,6 +102,7 @@ export type InitOptions = {
 class Sdk implements ISdk {
   private ws?: WebSocket
   private functions = new Map<string, RemoteFunctionData>()
+  private httpFunctions = new Map<string, RegisterFunctionMessage>()
   private services = new Map<string, Omit<RegisterServiceMessage, 'functions'>>()
   private invocations = new Map<string, Invocation & { timeout?: NodeJS.Timeout }>()
   private triggers = new Map<string, RegisterTriggerMessage>()
@@ -190,6 +192,9 @@ class Sdk implements ISdk {
     if (!message.id || message.id.trim() === '') {
       throw new Error('id is required')
     }
+    if (this.httpFunctions.has(message.id)) {
+      throw new Error(`function id already registered: ${message.id}`)
+    }
 
     this.sendMessage(MessageType.RegisterFunction, message, true)
     this.functions.set(message.id, {
@@ -226,6 +231,38 @@ class Sdk implements ISdk {
       unregister: () => {
         this.sendMessage(MessageType.UnregisterFunction, { id: message.id }, true)
         this.functions.delete(message.id)
+      },
+    }
+  }
+
+  registerHttpFunction = (id: string, config: HttpInvocationConfig): FunctionRef => {
+    if (!id || id.trim() === '') {
+      throw new Error('id is required')
+    }
+    if (this.functions.has(id) || this.httpFunctions.has(id)) {
+      throw new Error(`function id already registered: ${id}`)
+    }
+
+    const message: RegisterFunctionMessage = {
+      message_type: MessageType.RegisterFunction,
+      id,
+      invocation: {
+        url: config.url,
+        method: config.method ?? 'POST',
+        timeout_ms: config.timeout_ms,
+        headers: config.headers,
+        auth: config.auth,
+      },
+    }
+
+    this.sendMessage(MessageType.RegisterFunction, message, true)
+    this.httpFunctions.set(id, message)
+
+    return {
+      id,
+      unregister: () => {
+        this.sendMessage(MessageType.UnregisterFunction, { id }, true)
+        this.httpFunctions.delete(id)
       },
     }
   }
@@ -604,6 +641,9 @@ class Sdk implements ISdk {
       this.sendMessage(MessageType.RegisterService, service, true)
     })
     this.functions.forEach(({ message }) => {
+      this.sendMessage(MessageType.RegisterFunction, message, true)
+    })
+    this.httpFunctions.forEach(message => {
       this.sendMessage(MessageType.RegisterFunction, message, true)
     })
     this.triggers.forEach(trigger => {

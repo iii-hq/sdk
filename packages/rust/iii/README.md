@@ -65,10 +65,10 @@ Rust requires an explicit `iii.connect().await?` call. This starts a background 
 ### Streams
 
 ```rust
-let stream = iii.stream();
+use iii_sdk::Streams;
 
-stream.set("room.123", json!({ "users": ["alice", "bob"] })).await?;
-let state = stream.get("room.123").await?;
+let streams = Streams::new(iii.clone());
+streams.set_field("room::123", "users", json!(["alice", "bob"])).await?;
 ```
 
 ### OpenTelemetry

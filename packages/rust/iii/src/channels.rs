@@ -38,6 +38,9 @@ type WsReader = futures_util::stream::SplitStream<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 >;
 
+type MessageCallback = Box<dyn Fn(String) + Send + Sync>;
+type MessageCallbacks = Arc<Mutex<Vec<MessageCallback>>>;
+
 fn build_channel_url(
     engine_ws_base: &str,
     channel_id: &str,
@@ -132,7 +135,7 @@ impl ChannelWriter {
 pub struct ChannelReader {
     url: String,
     ws: Arc<Mutex<Option<WsReader>>>,
-    message_callbacks: Arc<Mutex<Vec<Box<dyn Fn(String) + Send + Sync>>>>,
+    message_callbacks: MessageCallbacks,
 }
 
 impl ChannelReader {

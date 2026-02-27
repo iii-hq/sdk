@@ -4,9 +4,11 @@ import type {
   RegisterServiceMessage,
   RegisterTriggerMessage,
   RegisterTriggerTypeMessage,
+  StreamChannelRef,
 } from './iii-types'
 import type { TriggerHandler } from './triggers'
 import type { IStream } from './stream'
+import type { ChannelReader, ChannelWriter } from './channels'
 
 // biome-ignore lint/suspicious/noExplicitAny: generic defaults require any for contravariant compatibility
 export type RemoteFunctionHandler<TInput = any, TOutput = any> = (data: TInput) => Promise<TOutput>
@@ -124,11 +126,6 @@ export interface ISdk {
    */
   triggerVoid<TInput>(function_id: string, data: TInput): void
 
-  /**
-   * Lists all registered functions.
-   */
-  listFunctions(): Promise<FunctionInfo[]>
-
   call<TInput, TOutput>(function_id: string, data: TInput, timeoutMs?: number): Promise<TOutput>
 
   callVoid<TInput>(function_id: string, data: TInput): void
@@ -156,6 +153,16 @@ export interface ISdk {
    * @param callback - The callback to register
    */
   on(event: string, callback: (arg?: unknown) => void): void
+
+  /**
+   * Creates a streaming channel pair for worker-to-worker data transfer.
+   * Returns a Channel with a local writer/reader and serializable refs that
+   * can be passed as fields in the invocation data to other functions.
+   *
+   * @param bufferSize - Optional buffer size for the channel (default: 64)
+   * @returns A Channel with writer, reader, and their serializable refs
+   */
+  createChannel(bufferSize?: number): Promise<Channel>
 
   /**
    * Creates a new stream implementation.
@@ -196,13 +203,32 @@ export type FunctionRef = {
   unregister: () => void
 }
 
-export type ApiRequest<TBody = unknown> = {
+export type Channel = {
+  writer: ChannelWriter
+  reader: ChannelReader
+  writerRef: StreamChannelRef
+  readerRef: StreamChannelRef
+}
+
+export type InternalHttpRequest<TBody = unknown> = {
   path_params: Record<string, string>
   query_params: Record<string, string | string[]>
   body: TBody
   headers: Record<string, string | string[]>
   method: string
+  response: ChannelWriter
+  request_body: ChannelReader
 }
+
+export type HttpResponse = {
+  status: (statusCode: number) => void
+  headers: (headers: Record<string, string>) => void
+  stream: NodeJS.WritableStream
+  close: () => void
+}
+
+export type HttpRequest<TBody = unknown> = Omit<InternalHttpRequest<TBody>, 'response'>
+export type ApiRequest<TBody = unknown> = HttpRequest<TBody>
 
 export type ApiResponse<
   TStatus extends number = number,
@@ -210,5 +236,5 @@ export type ApiResponse<
 > = {
   status_code: TStatus
   headers?: Record<string, string>
-  body: TBody
+  body?: TBody
 }

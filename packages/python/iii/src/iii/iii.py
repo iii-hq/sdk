@@ -14,6 +14,7 @@ from typing import Any, Awaitable, Callable, Literal
 import websockets
 from websockets.asyncio.client import ClientConnection
 
+from .channels import ChannelReader, ChannelWriter
 from .context import Context, with_context
 from .iii_types import (
     FunctionInfo,
@@ -24,6 +25,7 @@ from .iii_types import (
     RegisterServiceMessage,
     RegisterTriggerMessage,
     RegisterTriggerTypeMessage,
+    StreamChannelRef,
     UnregisterFunctionMessage,
     UnregisterTriggerMessage,
     UnregisterTriggerTypeMessage,
@@ -32,7 +34,7 @@ from .iii_types import (
 from .logger import Logger
 from .stream import IStream
 from .triggers import Trigger, TriggerConfig, TriggerHandler
-from .types import RemoteFunctionData, RemoteTriggerTypeData
+from .types import Channel, RemoteFunctionData, RemoteTriggerTypeData, is_channel_ref
 
 RemoteFunctionHandler = Callable[[Any], Awaitable[Any]]
 
@@ -376,6 +378,23 @@ class III:
         except ImportError:
             return await handler(data), None
 
+    def _resolve_channels(self, data: Any) -> Any:
+        """Recursively resolve StreamChannelRef objects into ChannelReader/ChannelWriter instances."""
+        if is_channel_ref(data):
+            ref = StreamChannelRef(**data)
+            return (
+                ChannelReader(self._address, ref)
+                if ref.direction == "read"
+                else ChannelWriter(self._address, ref)
+            )
+        if isinstance(data, dict):
+            return {k: self._resolve_channels(v) for k, v in data.items()}
+        if isinstance(data, list):
+            return [self._resolve_channels(v) for v in data]
+        if isinstance(data, tuple):
+            return tuple(self._resolve_channels(v) for v in data)
+        return data
+
     async def _handle_invoke(
         self,
         invocation_id: str | None,
@@ -398,15 +417,34 @@ class III:
                 )
             return
 
+        try:
+            resolved_data = self._resolve_channels(data)
+        except Exception as e:
+            log.exception("Failed to resolve channel refs")
+            if invocation_id:
+                await self._send(
+                    InvocationResultMessage(
+                        invocation_id=invocation_id,
+                        function_id=path,
+                        error={"code": "invocation_failed", "message": str(e)},
+                    )
+                )
+            return
+
         if not invocation_id:
             task = asyncio.create_task(
-                self._invoke_with_context(func.handler, data, traceparent, baggage)
+                self._invoke_with_context(func.handler, resolved_data, traceparent, baggage)
             )
             task.add_done_callback(self._log_task_exception)
             return
 
         try:
-            result, response_traceparent = await self._invoke_with_context(func.handler, data, traceparent, baggage)
+            result, response_traceparent = await self._invoke_with_context(
+                func.handler,
+                resolved_data,
+                traceparent,
+                baggage,
+            )
             await self._send(
                 InvocationResultMessage(
                     invocation_id=invocation_id,
@@ -594,6 +632,25 @@ class III:
         result = await self.trigger("engine::workers::list", {})
         workers_data = result.get("workers", [])
         return [WorkerInfo(**w) for w in workers_data]
+
+    async def create_channel(self, buffer_size: int | None = None) -> Channel:
+        """Create a streaming channel pair for worker-to-worker data transfer.
+
+        Returns a Channel with writer, reader, and their serializable refs
+        that can be passed as fields in the invocation data to other functions.
+
+        Args:
+            buffer_size: Optional buffer size for the channel (default: 64).
+        """
+        result = await self.call("engine::channels::create", {"buffer_size": buffer_size})
+        writer_ref = StreamChannelRef(**result["writer"])
+        reader_ref = StreamChannelRef(**result["reader"])
+        return Channel(
+            writer=ChannelWriter(self._address, writer_ref),
+            reader=ChannelReader(self._address, reader_ref),
+            writer_ref=writer_ref,
+            reader_ref=reader_ref,
+        )
 
     def _get_worker_metadata(self) -> dict[str, Any]:
         """Get worker metadata for registration."""

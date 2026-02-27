@@ -32,6 +32,7 @@ use uuid::Uuid;
 const SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 use crate::{
+    channels::{ChannelReader, ChannelWriter, StreamChannelRef},
     context::{Context, with_context},
     error::IIIError,
     logger::Logger,
@@ -41,7 +42,7 @@ use crate::{
         UnregisterTriggerTypeMessage,
     },
     triggers::{Trigger, TriggerConfig, TriggerHandler},
-    types::{RemoteFunctionData, RemoteFunctionHandler, RemoteTriggerTypeData},
+    types::{Channel, RemoteFunctionData, RemoteFunctionHandler, RemoteTriggerTypeData},
 };
 
 #[cfg(feature = "otel")]
@@ -251,6 +252,11 @@ impl III {
         Self {
             inner: Arc::new(inner),
         }
+    }
+
+    /// Get the engine WebSocket address this client connects to.
+    pub fn address(&self) -> &str {
+        &self.inner.address
     }
 
     /// Set custom worker metadata (call before connect)
@@ -714,6 +720,42 @@ impl III {
             .unwrap_or_default();
 
         Ok(triggers)
+    }
+
+    /// Create a streaming channel pair for worker-to-worker data transfer.
+    ///
+    /// Returns a `Channel` with writer, reader, and their serializable refs
+    /// that can be passed as fields in invocation data to other functions.
+    pub async fn create_channel(&self, buffer_size: Option<usize>) -> Result<Channel, IIIError> {
+        let result = self
+            .call(
+                "engine::channels::create",
+                serde_json::json!({ "buffer_size": buffer_size }),
+            )
+            .await?;
+
+        let writer_ref: StreamChannelRef = serde_json::from_value(
+            result
+                .get("writer")
+                .cloned()
+                .ok_or_else(|| IIIError::Serde("missing 'writer' in channel response".into()))?,
+        )
+        .map_err(|e| IIIError::Serde(e.to_string()))?;
+
+        let reader_ref: StreamChannelRef = serde_json::from_value(
+            result
+                .get("reader")
+                .cloned()
+                .ok_or_else(|| IIIError::Serde("missing 'reader' in channel response".into()))?,
+        )
+        .map_err(|e| IIIError::Serde(e.to_string()))?;
+
+        Ok(Channel {
+            writer: ChannelWriter::new(&self.inner.address, &writer_ref),
+            reader: ChannelReader::new(&self.inner.address, &reader_ref),
+            writer_ref,
+            reader_ref,
+        })
     }
 
     /// Register this worker's metadata with the engine (called automatically on connect)

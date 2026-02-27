@@ -178,6 +178,12 @@ export type UnregisterFunctionMessage = {
   id: string
 }
 
+export type StreamChannelRef = {
+  channel_id: string
+  access_key: string
+  direction: 'read' | 'write'
+}
+
 export type IIIMessage =
   | RegisterFunctionMessage
   | UnregisterFunctionMessage

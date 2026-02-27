@@ -57,12 +57,7 @@ class FakeWebSocket:
         raise StopAsyncIteration
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return "asyncio"
-
-
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_preconnect_registration_sent_once(monkeypatch: pytest.MonkeyPatch) -> None:
     ws = FakeWebSocket()
     connect_calls = 0
@@ -97,7 +92,7 @@ async def test_preconnect_registration_sent_once(monkeypatch: pytest.MonkeyPatch
     assert len(reg_trigger) == 1, ws.sent
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_reconnect_replays_durable_state_once_per_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -145,7 +140,7 @@ async def test_reconnect_replays_durable_state_once_per_connection(
     assert total_trigger == 2
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_call_void_queued_while_disconnected_flushes_after_connect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

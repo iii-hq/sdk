@@ -68,6 +68,8 @@ async def test_preconnect_registration_sent_once(monkeypatch: pytest.MonkeyPatch
         return ws
 
     monkeypatch.setattr(iii_module.websockets, "connect", fake_connect)
+    monkeypatch.setattr("iii.telemetry.init_otel", lambda **kwargs: None)
+    monkeypatch.setattr("iii.telemetry.attach_event_loop", lambda loop: None)
 
     client = III("ws://fake")
     client._register_worker_metadata = lambda: None
@@ -104,6 +106,8 @@ async def test_reconnect_replays_durable_state_once_per_connection(
         return ws
 
     monkeypatch.setattr(iii_module.websockets, "connect", fake_connect)
+    monkeypatch.setattr("iii.telemetry.init_otel", lambda **kwargs: None)
+    monkeypatch.setattr("iii.telemetry.attach_event_loop", lambda loop: None)
 
     client = III("ws://fake")
     client._register_worker_metadata = lambda: None
@@ -150,6 +154,8 @@ async def test_call_void_queued_while_disconnected_flushes_after_connect(
         return ws
 
     monkeypatch.setattr(iii_module.websockets, "connect", fake_connect)
+    monkeypatch.setattr("iii.telemetry.init_otel", lambda **kwargs: None)
+    monkeypatch.setattr("iii.telemetry.attach_event_loop", lambda loop: None)
 
     client = III("ws://fake")
     client._register_worker_metadata = lambda: None

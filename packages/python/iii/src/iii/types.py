@@ -97,6 +97,7 @@ class IIIClient(Protocol):
         function_id: str,
         handler: RemoteFunctionHandler,
         description: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Any: ...
 
     async def trigger(self, function_id: str, data: Any, timeout: float = 30.0) -> Any: ...

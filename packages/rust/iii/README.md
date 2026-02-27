@@ -82,7 +82,7 @@ iii-sdk = { version = "0.3", features = ["otel"] }
 
 ## Notes
 
-- `III::connect` starts a background task and handles reconnection automatically
+- `connect()` starts a background task and handles reconnection automatically
 - `register_function` does not return a handle (unlike the Node.js and Python SDKs)
 - The engine protocol supports `registertriggertype` but does not include `unregistertriggertype`; `unregister_trigger_type` only removes local handlers
 

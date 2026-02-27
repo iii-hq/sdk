@@ -35,6 +35,7 @@ async def main():
     )
 
     result = await iii.trigger("greet", {"name": "world"})
+    print(result)
 
 asyncio.run(main())
 ```
@@ -74,7 +75,7 @@ async def main():
         type="http",
         function_id="api.post.todo",
         config={
-            "api_path": "/todo",
+            "api_path": "todo",
             "http_method": "POST",
             "description": "Create a new todo"
         }

@@ -33,6 +33,7 @@ const result = await iii.trigger('greet', { name: 'world' })
 ### Python
 
 ```python
+import asyncio
 from iii import III
 
 iii = III("ws://localhost:49134")
@@ -45,6 +46,8 @@ iii.register_function("greet", greet)
 async def main():
     await iii.connect()
     result = await iii.trigger("greet", {"name": "world"})
+
+asyncio.run(main())
 ```
 
 ### Rust

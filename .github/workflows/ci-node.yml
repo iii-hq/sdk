@@ -63,16 +63,17 @@ jobs:
 
       - name: Start III Engine
         run: |
-          docker run -d --name iii-engine --network=host \
-            -v "${{ github.workspace }}/packages/node/iii/tests/fixtures/config-test.yaml":/app/config.yaml:ro \
-            -e RUST_LOG=info \
-            iiidev/iii:build-amd64
+          curl -fsSl https://raw.githubusercontent.com/iii-hq/iii/main/install.sh | sh
+          which iii
+          iii --version
+          iii -v
 
-      - name: Wait for III Engine
-        run: |
+          iii --config "${{ github.workspace }}/packages/node/iii/tests/fixtures/config-test.yaml" > /tmp/iii-engine.log 2>&1 &
+          echo $! > /tmp/iii-engine.pid
+
           echo "Waiting for III Engine on port 49199..."
           for i in $(seq 1 30); do
-            if nc -z localhost 49199 2>/dev/null; then
+            if nc -z 127.0.0.1 49199 2>/dev/null; then
               echo "III Engine is ready!"
               exit 0
             fi
@@ -80,7 +81,7 @@ jobs:
             sleep 2
           done
           echo "Engine did not become ready. Logs:"
-          docker logs iii-engine
+          tail -n 50 /tmp/iii-engine.log || true
           exit 1
 
       - name: Run tests
@@ -91,4 +92,7 @@ jobs:
 
       - name: Stop III Engine
         if: always()
-        run: docker rm -f iii-engine || true
+        run: |
+          if [ -f /tmp/iii-engine.pid ]; then
+            kill "$(cat /tmp/iii-engine.pid)" || true
+          fi

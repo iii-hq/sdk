@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generic, Literal, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -124,6 +124,69 @@ class IIIClient(Protocol):
     def create_stream(self, stream_name: str, stream: IStream[Any]) -> None: ...
 
     def on_functions_available(self, callback: FunctionsAvailableCallback) -> Callable[[], None]: ...
+
+    def register_middleware(self, opts: RegisterMiddlewareInput) -> MiddlewareRef: ...
+
+    def use(
+        self,
+        phase: MiddlewarePhase,
+        path_or_handler: str | MiddlewareHandler,
+        handler: MiddlewareHandler | None = None,
+    ) -> MiddlewareRef: ...
+
+
+MiddlewarePhase = Literal[
+    "onRequest",
+    "preHandler",
+    "postHandler",
+    "onResponse",
+    "onError",
+    "onTimeout",
+]
+
+
+class MiddlewareScope(BaseModel):
+    path: str
+
+
+class MatchedRoute(BaseModel):
+    function_id: str
+    path_pattern: str
+
+
+class MiddlewareRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    phase: str
+    request: ApiRequest[Any]
+    context: dict[str, Any] = Field(default_factory=dict)
+    matched_route: MatchedRoute | None = None
+
+
+class MiddlewareResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    action: Literal["continue", "respond"]
+    request: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
+    response: ApiResponse[Any] | None = None
+
+
+MiddlewareHandler = Callable[[MiddlewareRequest], Awaitable[MiddlewareResult]]
+
+
+@dataclass
+class MiddlewareRef:
+    middleware_id: str
+    unregister: Callable[[], None]
+
+
+class RegisterMiddlewareInput(BaseModel):
+    middleware_id: str
+    phase: MiddlewarePhase
+    scope: MiddlewareScope | None = None
+    priority: int | None = None
+    function_id: str
 
 
 class ApiRequest(BaseModel, Generic[TInput]):

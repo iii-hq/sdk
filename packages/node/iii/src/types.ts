@@ -198,6 +198,26 @@ export interface ISdk {
   onLog(callback: LogCallback, config?: LogConfig): () => void
 
   /**
+   * Registers HTTP middleware for a lifecycle phase.
+   * @param opts - Middleware registration options
+   * @returns A reference that can be used to unregister the middleware
+   */
+  registerMiddleware(opts: RegisterMiddlewareInput): MiddlewareRef
+
+  /**
+   * Convenience helper that registers both a function and middleware in one call.
+   * @param phase - The middleware phase
+   * @param pathOrHandler - Path pattern (e.g. "/api/*") or handler for global scope
+   * @param handler - Handler when path is provided
+   * @returns A reference that can be used to unregister
+   */
+  use(
+    phase: MiddlewarePhase,
+    pathOrHandler: string | MiddlewareHandler,
+    handler?: MiddlewareHandler,
+  ): MiddlewareRef
+
+  /**
    * Gracefully shutdown the iii, cleaning up all resources.
    */
   shutdown(): Promise<void>
@@ -246,4 +266,50 @@ export type ApiResponse<
   status_code: TStatus
   headers?: Record<string, string>
   body?: TBody
+}
+
+export type MiddlewarePhase =
+  | 'onRequest'
+  | 'preHandler'
+  | 'postHandler'
+  | 'onResponse'
+  | 'onError'
+  | 'onTimeout'
+
+export type MiddlewareScope = {
+  path: string
+}
+
+export type MatchedRoute = {
+  function_id: string
+  path_pattern: string
+}
+
+export type MiddlewareRequest = {
+  phase: string
+  request: ApiRequest
+  context: Record<string, unknown>
+  matched_route?: MatchedRoute
+}
+
+export type MiddlewareResult = {
+  action: 'continue' | 'respond'
+  request?: Partial<ApiRequest>
+  context?: Record<string, unknown>
+  response?: ApiResponse
+}
+
+export type MiddlewareHandler = (req: MiddlewareRequest) => Promise<MiddlewareResult>
+
+export type MiddlewareRef = {
+  middlewareId: string
+  unregister: () => void
+}
+
+export type RegisterMiddlewareInput = {
+  middlewareId: string
+  phase: MiddlewarePhase
+  scope?: MiddlewareScope
+  priority?: number
+  functionId: string
 }

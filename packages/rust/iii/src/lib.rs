@@ -17,19 +17,20 @@ pub use channels::{
 pub use context::{Context, get_context, with_context};
 pub use error::IIIError;
 pub use iii::{
-    FunctionInfo, FunctionsAvailableGuard, HttpFunctionRef, III, TriggerInfo, WorkerInfo,
-    WorkerMetadata,
+    FunctionInfo, FunctionsAvailableGuard, HttpFunctionRef, III, MiddlewareRef, TriggerInfo,
+    WorkerInfo, WorkerMetadata,
 };
 pub use logger::Logger;
 pub use protocol::{
     ErrorBody, FunctionMessage, HttpAuthConfig, HttpInvocationConfig, HttpMethod, Message,
-    RegisterFunctionMessage, RegisterServiceMessage, RegisterTriggerMessage,
-    RegisterTriggerTypeMessage,
+    RegisterFunctionMessage, RegisterMiddlewareMessage, RegisterMiddlewareScope,
+    RegisterServiceMessage, RegisterTriggerMessage, RegisterTriggerTypeMessage,
 };
 pub use stream::{Streams, UpdateBuilder};
 pub use triggers::{Trigger, TriggerConfig, TriggerHandler};
 pub use types::{
-    ApiRequest, ApiResponse, Channel, FieldPath, StreamUpdateInput, UpdateOp, UpdateResult,
+    ApiRequest, ApiResponse, Channel, FieldPath, MatchedRoute, MiddlewareAction, MiddlewareRequest,
+    MiddlewareResult, StreamUpdateInput, UpdateOp, UpdateResult,
 };
 
 pub use serde_json::Value;

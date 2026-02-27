@@ -90,6 +90,9 @@ pub enum Message {
     UnregisterFunction {
         id: String,
     },
+    UnregisterFunction {
+        id: String,
+    },
     InvokeFunction {
         invocation_id: Option<Uuid>,
         function_id: String,
@@ -122,6 +125,23 @@ pub enum Message {
     WorkerRegistered {
         worker_id: String,
     },
+    RegisterMiddleware {
+        middleware_id: String,
+        phase: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        scope: Option<RegisterMiddlewareScope>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        priority: Option<u16>,
+        function_id: String,
+    },
+    DeregisterMiddleware {
+        middleware_id: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterMiddlewareScope {
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -243,6 +263,29 @@ pub struct FunctionMessage {
     pub response_format: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterMiddlewareMessage {
+    pub middleware_id: String,
+    pub phase: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<RegisterMiddlewareScope>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<u16>,
+    pub function_id: String,
+}
+
+impl RegisterMiddlewareMessage {
+    pub fn to_message(&self) -> Message {
+        Message::RegisterMiddleware {
+            middleware_id: self.middleware_id.clone(),
+            phase: self.phase.clone(),
+            scope: self.scope.clone(),
+            priority: self.priority,
+            function_id: self.function_id.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

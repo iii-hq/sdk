@@ -10,6 +10,8 @@ export enum MessageType {
   UnregisterTriggerType = 'unregistertriggertype',
   TriggerRegistrationResult = 'triggerregistrationresult',
   WorkerRegistered = 'workerregistered',
+  RegisterMiddleware = 'registermiddleware',
+  DeregisterMiddleware = 'deregistermiddleware',
 }
 
 export type RegisterTriggerTypeMessage = {
@@ -201,6 +203,24 @@ export type StreamChannelRef = {
   direction: 'read' | 'write'
 }
 
+export type RegisterMiddlewareScope = {
+  path: string
+}
+
+export type RegisterMiddlewareMessage = {
+  message_type: MessageType.RegisterMiddleware
+  middleware_id: string
+  phase: string
+  scope?: RegisterMiddlewareScope
+  priority?: number
+  function_id: string
+}
+
+export type DeregisterMiddlewareMessage = {
+  message_type: MessageType.DeregisterMiddleware
+  middleware_id: string
+}
+
 export type IIIMessage =
   | RegisterFunctionMessage
   | UnregisterFunctionMessage
@@ -213,3 +233,5 @@ export type IIIMessage =
   | UnregisterTriggerTypeMessage
   | TriggerRegistrationResultMessage
   | WorkerRegisteredMessage
+  | RegisterMiddlewareMessage
+  | DeregisterMiddlewareMessage

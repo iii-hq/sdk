@@ -19,6 +19,7 @@ import {
   type InvokeFunctionMessage,
   MessageType,
   type RegisterFunctionMessage,
+  type RegisterMiddlewareMessage,
   type RegisterServiceMessage,
   type RegisterTriggerMessage,
   type RegisterTriggerTypeMessage,
@@ -63,6 +64,12 @@ import type {
   FunctionRef,
 } from './types'
 import { isChannelRef } from './utils'
+import type {
+  MiddlewareHandler,
+  MiddlewarePhase,
+  MiddlewareRef,
+  RegisterMiddlewareInput,
+} from './types'
 
 const require = createRequire(import.meta.url)
 const { version: SDK_VERSION } = require('../package.json')
@@ -107,6 +114,7 @@ class Sdk implements ISdk {
   private invocations = new Map<string, Invocation & { timeout?: NodeJS.Timeout }>()
   private triggers = new Map<string, RegisterTriggerMessage>()
   private triggerTypes = new Map<string, RemoteTriggerTypeData>()
+  private middlewares = new Map<string, RegisterMiddlewareMessage>()
   private functionsAvailableCallbacks = new Set<FunctionsAvailableCallback>()
   private functionsAvailableTrigger?: Trigger
   private functionsAvailableFunctionPath?: string
@@ -427,6 +435,66 @@ class Sdk implements ISdk {
     }
   }
 
+  registerMiddleware = (opts: RegisterMiddlewareInput): MiddlewareRef => {
+    const msg: RegisterMiddlewareMessage = {
+      message_type: MessageType.RegisterMiddleware,
+      middleware_id: opts.middlewareId,
+      phase: opts.phase,
+      scope: opts.scope,
+      priority: opts.priority,
+      function_id: opts.functionId,
+    }
+    this.sendMessage(MessageType.RegisterMiddleware, {
+      middleware_id: msg.middleware_id,
+      phase: msg.phase,
+      scope: msg.scope,
+      priority: msg.priority,
+      function_id: msg.function_id,
+    }, true)
+    this.middlewares.set(opts.middlewareId, msg)
+
+    return {
+      middlewareId: opts.middlewareId,
+      unregister: () => {
+        this.sendMessage(MessageType.DeregisterMiddleware, { middleware_id: opts.middlewareId }, true)
+        this.middlewares.delete(opts.middlewareId)
+      },
+    }
+  }
+
+  use = (
+    phase: MiddlewarePhase,
+    pathOrHandler: string | MiddlewareHandler,
+    handler?: MiddlewareHandler,
+  ): MiddlewareRef => {
+    const path = typeof pathOrHandler === 'string' ? pathOrHandler : undefined
+    const fn = (typeof pathOrHandler === 'function' ? pathOrHandler : handler) as MiddlewareHandler
+    if (!fn) {
+      throw new Error('use() requires a handler function')
+    }
+
+    const id = crypto.randomUUID()
+    const functionId = `middleware::${phase}::${id}`
+    const middlewareId = `middleware::${phase}::${id}`
+
+    const functionRef = this.registerFunction({ id: functionId }, fn as RemoteFunctionHandler)
+    const middlewareRef = this.registerMiddleware({
+      middlewareId,
+      phase,
+      scope: path ? { path } : undefined,
+      priority: 100,
+      functionId,
+    })
+
+    return {
+      middlewareId,
+      unregister: () => {
+        middlewareRef.unregister()
+        functionRef.unregister()
+      },
+    }
+  }
+
   onLog = (callback: LogCallback, config?: LogConfig): (() => void) => {
     const effectiveConfig = config ?? { level: 'all' }
     this.logCallbacks.set(callback, effectiveConfig)
@@ -645,6 +713,15 @@ class Sdk implements ISdk {
     })
     this.httpFunctions.forEach(message => {
       this.sendMessage(MessageType.RegisterFunction, message, true)
+    })
+    this.middlewares.forEach(msg => {
+      this.sendMessage(MessageType.RegisterMiddleware, {
+        middleware_id: msg.middleware_id,
+        phase: msg.phase,
+        scope: msg.scope,
+        priority: msg.priority,
+        function_id: msg.function_id,
+      }, true)
     })
     this.triggers.forEach(trigger => {
       this.sendMessage(MessageType.RegisterTrigger, trigger, true)

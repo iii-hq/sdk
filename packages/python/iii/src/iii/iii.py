@@ -17,12 +17,15 @@ from websockets.asyncio.client import ClientConnection
 from .channels import ChannelReader, ChannelWriter
 from .context import Context, with_context
 from .iii_types import (
+    DeregisterMiddlewareMessage,
     FunctionInfo,
     HttpInvocationConfig,
     InvocationResultMessage,
     InvokeFunctionMessage,
     MessageType,
     RegisterFunctionMessage,
+    RegisterMiddlewareMessage,
+    RegisterMiddlewareScope,
     RegisterServiceMessage,
     RegisterTriggerMessage,
     RegisterTriggerTypeMessage,
@@ -35,7 +38,17 @@ from .iii_types import (
 from .logger import Logger
 from .stream import IStream
 from .triggers import Trigger, TriggerConfig, TriggerHandler
-from .types import Channel, RemoteFunctionData, RemoteTriggerTypeData, is_channel_ref
+from .types import (
+    Channel,
+    MiddlewareHandler,
+    MiddlewarePhase,
+    MiddlewareRef,
+    MiddlewareScope,
+    RegisterMiddlewareInput,
+    RemoteFunctionData,
+    RemoteTriggerTypeData,
+    is_channel_ref,
+)
 
 RemoteFunctionHandler = Callable[[Any], Awaitable[Any]]
 
@@ -110,6 +123,7 @@ class III:
         self._pending: dict[str, asyncio.Future[Any]] = {}
         self._triggers: dict[str, RegisterTriggerMessage] = {}
         self._trigger_types: dict[str, RemoteTriggerTypeData] = {}
+        self._middlewares: dict[str, RegisterMiddlewareMessage] = {}
         self._queue: list[dict[str, Any]] = []
         self._reconnect_task: asyncio.Task[None] | None = None
         self._running = False
@@ -215,6 +229,8 @@ class III:
         for function_data in self._functions.values():
             await self._send(function_data.message)
         for msg in self._http_functions.values():
+            await self._send(msg)
+        for msg in self._middlewares.values():
             await self._send(msg)
         for trigger in self._triggers.values():
             await self._send(trigger)
@@ -604,6 +620,56 @@ class III:
             self._send_if_connected(UnregisterFunctionMessage(id=id))
 
         return FunctionRef(id=id, unregister=unregister)
+
+    def register_middleware(self, opts: RegisterMiddlewareInput) -> MiddlewareRef:
+        scope = RegisterMiddlewareScope(path=opts.scope.path) if opts.scope else None
+        msg = RegisterMiddlewareMessage(
+            middleware_id=opts.middleware_id,
+            phase=opts.phase,
+            scope=scope,
+            priority=opts.priority,
+            function_id=opts.function_id,
+        )
+        self._send_if_connected(msg)
+        self._middlewares[opts.middleware_id] = msg
+
+        def unregister() -> None:
+            self._middlewares.pop(opts.middleware_id, None)
+            self._send_if_connected(DeregisterMiddlewareMessage(middleware_id=opts.middleware_id))
+
+        return MiddlewareRef(middleware_id=opts.middleware_id, unregister=unregister)
+
+    def use(
+        self,
+        phase: MiddlewarePhase,
+        path_or_handler: str | MiddlewareHandler,
+        handler: MiddlewareHandler | None = None,
+    ) -> MiddlewareRef:
+        path = path_or_handler if isinstance(path_or_handler, str) else None
+        fn = handler if isinstance(path_or_handler, str) else path_or_handler
+        if fn is None:
+            raise ValueError("use() requires a handler function")
+
+        id_ = str(uuid.uuid4())
+        function_id = f"middleware::{phase}::{id_}"
+        middleware_id = f"middleware::{phase}::{id_}"
+
+        function_ref = self.register_function(function_id, fn)
+        middleware_ref = self.register_middleware(
+            RegisterMiddlewareInput(
+                middleware_id=middleware_id,
+                phase=phase,
+                scope=MiddlewareScope(path=path) if path else None,
+                priority=100,
+                function_id=function_id,
+            )
+        )
+
+        def unregister_both() -> None:
+            middleware_ref.unregister()
+            function_ref.unregister()
+
+        return MiddlewareRef(middleware_id=middleware_id, unregister=unregister_both)
 
     def register_service(self, id: str, description: str | None = None, parent_id: str | None = None) -> None:
         msg = RegisterServiceMessage(id=id, description=description, parent_service_id=parent_id)

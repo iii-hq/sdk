@@ -7,6 +7,17 @@ use std::{
     time::Duration,
 };
 
+#[derive(Clone)]
+pub struct MiddlewareRef {
+    unregister_fn: Arc<dyn Fn() + Send + Sync>,
+}
+
+impl MiddlewareRef {
+    pub fn unregister(&self) {
+        (self.unregister_fn)();
+    }
+}
+
 /// Extension trait for Mutex that recovers from poisoning instead of panicking.
 /// This is safe when the protected data is still valid after a panic in another thread.
 trait MutexExt<T> {
@@ -37,9 +48,9 @@ use crate::{
     error::IIIError,
     logger::Logger,
     protocol::{
-        ErrorBody, HttpInvocationConfig, Message, RegisterFunctionMessage, RegisterServiceMessage,
-        RegisterTriggerMessage, RegisterTriggerTypeMessage, UnregisterTriggerMessage,
-        UnregisterTriggerTypeMessage,
+        ErrorBody, HttpInvocationConfig, Message, RegisterFunctionMessage, RegisterMiddlewareMessage,
+        RegisterMiddlewareScope, RegisterServiceMessage, RegisterTriggerMessage,
+        RegisterTriggerTypeMessage, UnregisterTriggerMessage, UnregisterTriggerTypeMessage,
     },
     triggers::{Trigger, TriggerConfig, TriggerHandler},
     types::{Channel, RemoteFunctionData, RemoteFunctionHandler, RemoteTriggerTypeData},
@@ -197,6 +208,7 @@ struct IIIInner {
     trigger_types: Mutex<HashMap<String, RemoteTriggerTypeData>>,
     triggers: Mutex<HashMap<String, RegisterTriggerMessage>>,
     services: Mutex<HashMap<String, RegisterServiceMessage>>,
+    middlewares: Mutex<HashMap<String, RegisterMiddlewareMessage>>,
     worker_metadata: Mutex<Option<WorkerMetadata>>,
     functions_available_callbacks: Mutex<HashMap<usize, FunctionsAvailableCallback>>,
     functions_available_callback_counter: AtomicUsize,
@@ -256,6 +268,7 @@ impl III {
             trigger_types: Mutex::new(HashMap::new()),
             triggers: Mutex::new(HashMap::new()),
             services: Mutex::new(HashMap::new()),
+            middlewares: Mutex::new(HashMap::new()),
             worker_metadata: Mutex::new(Some(metadata)),
             functions_available_callbacks: Mutex::new(HashMap::new()),
             functions_available_callback_counter: AtomicUsize::new(0),
@@ -529,6 +542,84 @@ impl III {
             .lock_or_recover()
             .insert(message.id.clone(), message.clone());
         let _ = self.send_message(message.to_message());
+    }
+
+    pub fn register_middleware(
+        &self,
+        middleware_id: impl Into<String>,
+        phase: impl Into<String>,
+        function_id: impl Into<String>,
+        scope: Option<impl Into<String>>,
+        priority: Option<u16>,
+    ) {
+        let middleware_id = middleware_id.into();
+        let message = RegisterMiddlewareMessage {
+            middleware_id: middleware_id.clone(),
+            phase: phase.into(),
+            scope: scope.map(|p| RegisterMiddlewareScope { path: p.into() }),
+            priority,
+            function_id: function_id.into(),
+        };
+        self.inner
+            .middlewares
+            .lock_or_recover()
+            .insert(middleware_id.clone(), message.clone());
+        let _ = self.send_message(message.to_message());
+    }
+
+    pub fn deregister_middleware(&self, middleware_id: impl Into<String>) {
+        let middleware_id = middleware_id.into();
+        self.inner.middlewares.lock_or_recover().remove(&middleware_id);
+        let _ = self.send_message(Message::DeregisterMiddleware {
+            middleware_id: middleware_id.clone(),
+        });
+    }
+
+    pub fn use_middleware<F, Fut>(
+        &self,
+        phase: impl Into<String>,
+        path: Option<impl Into<String>>,
+        handler: F,
+    ) -> MiddlewareRef
+    where
+        F: Fn(Value) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<Value, IIIError>> + Send + 'static,
+    {
+        let id = Uuid::new_v4();
+        let phase_str = phase.into();
+        let function_id = format!("middleware::{}::{}", phase_str, id);
+        let middleware_id = format!("middleware::{}::{}", phase_str, id);
+
+        let scope_path = path.map(|p| p.into());
+
+        self.register_function_with(
+            RegisterFunctionMessage {
+                id: function_id.clone(),
+                description: None,
+                request_format: None,
+                response_format: None,
+                metadata: None,
+            },
+            handler,
+        );
+        self.register_middleware(
+            middleware_id.clone(),
+            phase_str,
+            function_id.clone(),
+            scope_path,
+            Some(100),
+        );
+
+        let iii = self.clone();
+        let mid = middleware_id.clone();
+        let fid = function_id.clone();
+        MiddlewareRef {
+            unregister_fn: Arc::new(move || {
+                iii.deregister_middleware(&mid);
+                iii.inner.functions.lock_or_recover().remove(&fid);
+                let _ = iii.send_message(Message::UnregisterFunction { id: fid.clone() });
+            }),
+        }
     }
 
     pub fn register_trigger_type<H>(
@@ -952,6 +1043,10 @@ impl III {
             messages.push(message.to_message());
         }
 
+        for middleware in self.inner.middlewares.lock_or_recover().values() {
+            messages.push(middleware.to_message());
+        }
+
         for trigger in self.inner.triggers.lock_or_recover().values() {
             messages.push(trigger.to_message());
         }
@@ -967,8 +1062,9 @@ impl III {
             let key = match message {
                 Message::RegisterTriggerType { id, .. } => format!("trigger_type:{id}"),
                 Message::RegisterTrigger { id, .. } => format!("trigger:{id}"),
-                Message::RegisterFunction { id, .. } => {
-                    format!("function:{id}")
+                Message::RegisterFunction { id, .. } => format!("function:{id}"),
+                Message::RegisterMiddleware { middleware_id, .. } => {
+                    format!("middleware:{middleware_id}")
                 }
                 Message::RegisterService { id, .. } => format!("service:{id}"),
                 _ => {

@@ -49,6 +49,8 @@ class MessageType(str, Enum):
     UNREGISTER_TRIGGER_TYPE = "unregistertriggertype"
     TRIGGER_REGISTRATION_RESULT = "triggerregistrationresult"
     WORKER_REGISTERED = "workerregistered"
+    REGISTER_MIDDLEWARE = "registermiddleware"
+    DEREGISTER_MIDDLEWARE = "deregistermiddleware"
 
 
 class RegisterTriggerTypeMessage(BaseModel):
@@ -164,6 +166,30 @@ class UnregisterFunctionMessage(BaseModel):
     message_type: MessageType = Field(default=MessageType.UNREGISTER_FUNCTION, alias="type")
 
 
+class RegisterMiddlewareScope(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    path: str
+
+
+class RegisterMiddlewareMessage(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    middleware_id: str = Field()
+    phase: str = Field()
+    scope: RegisterMiddlewareScope | None = None
+    priority: int | None = None
+    function_id: str = Field()
+    message_type: MessageType = Field(default=MessageType.REGISTER_MIDDLEWARE, alias="type")
+
+
+class DeregisterMiddlewareMessage(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    middleware_id: str = Field()
+    message_type: MessageType = Field(default=MessageType.DEREGISTER_MIDDLEWARE, alias="type")
+
+
 class FunctionInfo(BaseModel):
     """Information about a registered function."""
 
@@ -213,4 +239,6 @@ IIIMessage = (
     | UnregisterTriggerTypeMessage
     | TriggerRegistrationResultMessage
     | WorkerRegisteredMessage
+    | RegisterMiddlewareMessage
+    | DeregisterMiddlewareMessage
 )

@@ -193,6 +193,40 @@ pub struct Channel {
     pub reader_ref: StreamChannelRef,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchedRoute {
+    pub function_id: String,
+    pub path_pattern: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MiddlewareRequest {
+    pub phase: String,
+    pub request: Value,
+    #[serde(default)]
+    pub context: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_route: Option<MatchedRoute>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MiddlewareAction {
+    Continue,
+    Respond,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MiddlewareResult {
+    pub action: MiddlewareAction,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response: Option<Value>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,5 +1,5 @@
 import type { StreamChannelRef } from './iii-types'
-import type { HttpRequest, HttpResponse, InternalHttpRequest } from './types'
+import type { ApiResponse, HttpRequest, HttpResponse, InternalHttpRequest } from './types'
 
 /**
  * Safely stringify a value, handling circular references, BigInt, and other edge cases.
@@ -30,7 +30,7 @@ export function safeStringify(value: unknown): string {
   }
 }
 
-export const http = (callback: (req: HttpRequest, res: HttpResponse) => Promise<void>) => {
+export const http = (callback: (req: HttpRequest, res: HttpResponse) => Promise<void | ApiResponse>) => {
   return async (req: InternalHttpRequest) => {
     const { response, ...request } = req
 
@@ -43,7 +43,7 @@ export const http = (callback: (req: HttpRequest, res: HttpResponse) => Promise<
       close: () => response.close(),
     }
 
-    await callback(request, httpResponse)
+    return callback(request, httpResponse)
   }
 }
 

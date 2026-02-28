@@ -31,7 +31,7 @@ export function safeStringify(value: unknown): string {
 }
 
 export const http = (
-  callback: (req: HttpRequest, res: HttpResponse) => Promise<undefined | ApiResponse>
+  callback: (req: HttpRequest, res: HttpResponse) => Promise<undefined | ApiResponse>,
 ) => {
   return async (req: InternalHttpRequest) => {
     const { response, ...request } = req

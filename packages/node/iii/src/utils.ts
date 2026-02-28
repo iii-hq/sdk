@@ -31,7 +31,8 @@ export function safeStringify(value: unknown): string {
 }
 
 export const http = (
-  callback: (req: HttpRequest, res: HttpResponse) => Promise<undefined | ApiResponse>,
+  // biome-ignore lint/suspicious/noConfusingVoidType: void is necessary here
+  callback: (req: HttpRequest, res: HttpResponse) => Promise<void | ApiResponse>,
 ) => {
   return async (req: InternalHttpRequest) => {
     const { response, ...request } = req

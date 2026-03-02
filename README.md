@@ -92,8 +92,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Prerequisites
 
 - Node.js 20+ and pnpm (for Node.js SDK)
-- Python 3.8+ and uv (for Python SDK)
-- Rust 1.70+ and Cargo (for Rust SDK)
+- Python 3.10+ and uv (for Python SDK)
+- Rust 1.85+ and Cargo (for Rust SDK)
 - iii engine running on `ws://localhost:49134`
 
 ### Building

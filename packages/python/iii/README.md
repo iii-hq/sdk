@@ -47,7 +47,8 @@ asyncio.run(main())
 | `III(url)` | Create an SDK instance |
 | `await iii.connect()` | Connect to the engine (sets up WebSocket + OTel) |
 | `iii.register_function(id, handler)` | Register a function that can be invoked by name |
-| `iii.register_trigger(type, function_id, config)` | Bind a trigger to a function |
+| `iii.register_trigger(type, function_id, config)` | Bind a trigger (HTTP, cron, queue, etc.) to a function |
+| `iii.register_trigger_type(id, description, handler)` | Register a custom trigger type |
 | `await iii.trigger(id, data)` | Invoke a function and wait for the result |
 | `iii.trigger_void(id, data)` | Invoke a function without waiting (fire-and-forget) |
 
@@ -55,31 +56,48 @@ asyncio.run(main())
 
 Python requires an explicit `await iii.connect()` call (no async constructors in Python). This sets up both the WebSocket connection and OpenTelemetry instrumentation.
 
-### HTTP Trigger Example
+### Registering Functions
 
 ```python
-from iii import III, ApiRequest, ApiResponse
-
-iii = III("ws://localhost:49134")
-
 async def create_todo(data):
-    req = ApiRequest(**data)
-    return ApiResponse(status=201, data={"id": "123", "title": req.body.get("title")})
+    return {"status_code": 201, "body": {"id": "123", "title": data["body"]["title"]}}
 
 iii.register_function("api.post.todo", create_todo)
+```
 
-async def main():
-    await iii.connect()
+### Registering Triggers
 
-    iii.register_trigger(
-        type="http",
-        function_id="api.post.todo",
-        config={
-            "api_path": "todo",
-            "http_method": "POST",
-            "description": "Create a new todo"
-        }
-    )
+```python
+iii.register_trigger(
+    type="http",
+    function_id="api.post.todo",
+    config={"api_path": "todo", "http_method": "POST"}
+)
+```
+
+### Custom Trigger Types
+
+```python
+from iii import III
+
+async def on_register(config):
+    pass  # setup
+
+async def on_unregister(config):
+    pass  # teardown
+
+iii.register_trigger_type("webhook", "External webhook trigger", {
+    "register_trigger": on_register,
+    "unregister_trigger": on_unregister,
+})
+```
+
+### Invoking Functions
+
+```python
+result = await iii.trigger("api.post.todo", {"body": {"title": "Buy milk"}})
+
+iii.trigger_void("analytics.track", {"event": "page_view"})
 ```
 
 ## Deprecated

@@ -54,13 +54,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `III::new(url)` | Create an SDK instance |
 | `iii.connect().await?` | Connect to the engine (sets up WebSocket + OTel) |
 | `iii.register_function(id, \|input\| ...)` | Register a function that can be invoked by name |
-| `iii.register_trigger(type, fn_id, config)?` | Bind a trigger to a function |
+| `iii.register_trigger(type, fn_id, config)?` | Bind a trigger (HTTP, cron, queue, etc.) to a function |
+| `iii.register_trigger_type(id, description, handler)` | Register a custom trigger type |
 | `iii.trigger(id, data).await?` | Invoke a function and wait for the result |
 | `iii.trigger_void(id, data)?` | Invoke a function without waiting (fire-and-forget) |
 
 ### Connection
 
 Rust requires an explicit `iii.connect().await?` call. This starts a background task that handles WebSocket communication and automatic reconnection. It also sets up OpenTelemetry instrumentation.
+
+### Registering Functions
+
+```rust
+iii.register_function("math.add", |input| async move {
+    let a = input["a"].as_i64().unwrap_or(0);
+    let b = input["b"].as_i64().unwrap_or(0);
+    Ok(json!({ "sum": a + b }))
+});
+```
+
+### Registering Triggers
+
+```rust
+iii.register_trigger("http", "math.add", json!({
+    "api_path": "add",
+    "http_method": "POST"
+}))?;
+```
+
+### Custom Trigger Types
+
+```rust
+iii.register_trigger_type("webhook", "External webhook trigger", my_handler);
+```
+
+### Invoking Functions
+
+```rust
+let result = iii.trigger("math.add", json!({ "a": 2, "b": 3 })).await?;
+
+iii.trigger_void("analytics.track", json!({ "event": "page_view" }))?;
+```
 
 ### Streams
 
@@ -80,15 +114,9 @@ Enable the `otel` feature for full tracing and metrics support:
 iii-sdk = { version = "0.3", features = ["otel"] }
 ```
 
-## Notes
-
-- `connect()` starts a background task and handles reconnection automatically
-- `register_function` does not return a handle (unlike the Node.js and Python SDKs)
-- The engine protocol supports `registertriggertype` but does not include `unregistertriggertype`; `unregister_trigger_type` only removes local handlers
-
 ## Deprecated
 
-`call()` is a deprecated alias for `trigger()`. It still works but will be removed in a future release.
+`call()` and `call_void()` are deprecated aliases for `trigger()` and `trigger_void()`. They still work but will be removed in a future release.
 
 ## Resources
 

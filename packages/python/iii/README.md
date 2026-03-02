@@ -67,6 +67,8 @@ iii.register_function("api.post.todo", create_todo)
 
 ### Registering Triggers
 
+Requires `await iii.connect()` first.
+
 ```python
 iii.register_trigger(
     type="http",
@@ -78,8 +80,6 @@ iii.register_trigger(
 ### Custom Trigger Types
 
 ```python
-from iii import III
-
 async def on_register(config):
     pass  # setup
 
@@ -93,6 +93,8 @@ iii.register_trigger_type("webhook", "External webhook trigger", {
 ```
 
 ### Invoking Functions
+
+Requires `await iii.connect()` first.
 
 ```python
 result = await iii.trigger("api.post.todo", {"body": {"title": "Buy milk"}})

@@ -75,6 +75,8 @@ iii.register_function("math.add", |input| async move {
 
 ### Registering Triggers
 
+Requires `iii.connect().await?` first.
+
 ```rust
 iii.register_trigger("http", "math.add", json!({
     "api_path": "add",
@@ -89,6 +91,8 @@ iii.register_trigger_type("webhook", "External webhook trigger", my_handler);
 ```
 
 ### Invoking Functions
+
+Requires `iii.connect().await?` first.
 
 ```rust
 let result = iii.trigger("math.add", json!({ "a": 2, "b": 3 })).await?;

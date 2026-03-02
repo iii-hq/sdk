@@ -87,6 +87,7 @@ iii.register_trigger("http", "math.add", json!({
 ### Custom Trigger Types
 
 ```rust
+// handler must implement TriggerHandler (register_trigger + unregister_trigger)
 iii.register_trigger_type("webhook", "External webhook trigger", my_handler);
 ```
 

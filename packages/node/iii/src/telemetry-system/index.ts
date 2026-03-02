@@ -177,10 +177,12 @@ export function initOtel(config: OtelConfig = {}): void {
     DEFAULT_OTEL_CONFIG.logsBatchSize
 
   loggerProvider = new LoggerProvider({ resource })
-  loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(logExporter, {
-    scheduledDelayMillis: logsScheduledDelayMillis,
-    maxExportBatchSize: logsMaxExportBatchSize,
-  }))
+  loggerProvider.addLogRecordProcessor(
+    new BatchLogRecordProcessor(logExporter, {
+      scheduledDelayMillis: logsScheduledDelayMillis,
+      maxExportBatchSize: logsMaxExportBatchSize,
+    }),
+  )
   logger = loggerProvider.getLogger(serviceName)
 
   console.debug(

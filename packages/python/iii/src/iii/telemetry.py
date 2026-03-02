@@ -10,7 +10,7 @@ import asyncio
 import logging
 import os
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from .telemetry_types import OtelConfig
 
@@ -205,11 +205,11 @@ def _configure_log_provider(resource: Any, connection: Any, cfg: OtelConfig) -> 
     log_provider = SdkLoggerProvider(resource=resource)
     log_provider.add_log_record_processor(
         BatchLogRecordProcessor(
-            log_exporter,
+            cast(Any, log_exporter),
             schedule_delay_millis=logs_flush_interval_ms,
             max_export_batch_size=logs_batch_size,
         )
-    )  # type: ignore[arg-type]
+    )
     _logs.set_logger_provider(log_provider)
     _log_provider = log_provider
 

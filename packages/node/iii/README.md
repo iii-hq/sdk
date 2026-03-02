@@ -11,7 +11,7 @@ Node.js / TypeScript SDK for the [iii engine](https://github.com/iii-hq/iii).
 npm install iii-sdk
 ```
 
-## Quick Start
+## Hello World
 
 ```javascript
 import { init } from 'iii-sdk'
@@ -33,14 +33,14 @@ const result = await iii.trigger('greet', { name: 'world' })
 
 ## API
 
-| Method | Description |
-|--------|-------------|
-| `init(url, options?)` | Create and connect to the engine. Returns an `ISdk` instance |
-| `iii.registerFunction({ id }, handler)` | Register a function that can be invoked by name |
-| `iii.registerTrigger({ type, function_id, config })` | Bind a trigger (HTTP, cron, queue, etc.) to a function |
-| `iii.registerTriggerType({ id, description }, handlers)` | Register a custom trigger type |
-| `await iii.trigger(id, data, timeoutMs?)` | Invoke a function and wait for the result |
-| `iii.triggerVoid(id, data)` | Invoke a function without waiting (fire-and-forget) |
+| Method                                                   | Description                                                  |
+| -------------------------------------------------------- | ------------------------------------------------------------ |
+| `init(url, options?)`                                    | Create and connect to the engine. Returns an `ISdk` instance |
+| `iii.registerFunction({ id }, handler)`                  | Register a function that can be invoked by name              |
+| `iii.registerTrigger({ type, function_id, config })`     | Bind a trigger (HTTP, cron, queue, etc.) to a function       |
+| `iii.registerTriggerType({ id, description }, handlers)` | Register a custom trigger type                               |
+| `await iii.trigger(id, data, timeoutMs?)`                | Invoke a function and wait for the result                    |
+| `iii.triggerVoid(id, data)`                              | Invoke a function without waiting (fire-and-forget)          |
 
 ### Registering Functions
 
@@ -66,8 +66,12 @@ iii.registerTrigger({
 iii.registerTriggerType(
   { id: 'webhook', description: 'External webhook trigger' },
   {
-    registerTrigger: async (config) => { /* setup */ },
-    unregisterTrigger: async (config) => { /* teardown */ },
+    registerTrigger: async (config) => {
+      /* setup */
+    },
+    unregisterTrigger: async (config) => {
+      /* teardown */
+    },
   },
 )
 ```
@@ -80,14 +84,14 @@ const result = await iii.trigger('orders.create', { item: 'widget' })
 iii.triggerVoid('analytics.track', { event: 'page_view' })
 ```
 
-## Subpath Exports
+## Node Modules
 
-| Import | What it provides |
-|--------|-----------------|
-| `iii-sdk` | Core SDK (`init`, types) |
-| `iii-sdk/stream` | Stream client for real-time state |
-| `iii-sdk/state` | State client for key-value operations |
-| `iii-sdk/telemetry` | OpenTelemetry integration |
+| Import              | What it provides                      |
+| ------------------- | ------------------------------------- |
+| `iii-sdk`           | Core SDK (`init`, types)              |
+| `iii-sdk/stream`    | Stream client for real-time state     |
+| `iii-sdk/state`     | State client for key-value operations |
+| `iii-sdk/telemetry` | OpenTelemetry integration             |
 
 ## Deprecated
 

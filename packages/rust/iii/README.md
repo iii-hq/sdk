@@ -17,7 +17,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 ```
 
-## Quick Start
+## Hello World
 
 ```rust
 use iii_sdk::III;
@@ -49,15 +49,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## API
 
-| Method | Description |
-|--------|-------------|
-| `III::new(url)` | Create an SDK instance |
-| `iii.connect().await?` | Connect to the engine (sets up WebSocket + OTel) |
-| `iii.register_function(id, \|input\| ...)` | Register a function that can be invoked by name |
-| `iii.register_trigger(type, fn_id, config)?` | Bind a trigger (HTTP, cron, queue, etc.) to a function |
-| `iii.register_trigger_type(id, description, handler)` | Register a custom trigger type |
-| `iii.trigger(id, data).await?` | Invoke a function and wait for the result |
-| `iii.trigger_void(id, data)?` | Invoke a function without waiting (fire-and-forget) |
+| Method                                                | Description                                            |
+| ----------------------------------------------------- | ------------------------------------------------------ |
+| `III::new(url)`                                       | Create an SDK instance                                 |
+| `iii.connect().await?`                                | Connect to the engine                                  |
+| `iii.register_function(id, \|input\| ...)`            | Register a function that can be invoked by name        |
+| `iii.register_trigger(type, fn_id, config)?`          | Bind a trigger (HTTP, cron, queue, etc.) to a function |
+| `iii.register_trigger_type(id, description, handler)` | Register a custom trigger type                         |
+| `iii.trigger(id, data).await?`                        | Invoke a function and wait for the result              |
+| `iii.trigger_void(id, data)?`                         | Invoke a function without waiting (fire-and-forget)    |
 
 ### Connection
 

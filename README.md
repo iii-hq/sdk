@@ -7,28 +7,28 @@ Official SDKs for the [iii engine](https://github.com/iii-hq/iii).
 [![crates.io](https://img.shields.io/crates/v/iii-sdk)](https://crates.io/crates/iii-sdk)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-## Packages
+## Installing Packages
 
-| Package | Language | Install | Docs |
-|---------|----------|---------|------|
-| [`iii-sdk`](https://www.npmjs.com/package/iii-sdk) | Node.js / TypeScript | `npm install iii-sdk` | [README](./packages/node/iii/README.md) |
-| [`iii-sdk`](https://pypi.org/project/iii-sdk/) | Python | `pip install iii-sdk` | [README](./packages/python/iii/README.md) |
-| [`iii-sdk`](https://crates.io/crates/iii-sdk) | Rust | Add to `Cargo.toml` | [README](./packages/rust/iii/README.md) |
+| Package                                            | Language             | Install               | Docs                                      |
+| -------------------------------------------------- | -------------------- | --------------------- | ----------------------------------------- |
+| [`iii-sdk`](https://www.npmjs.com/package/iii-sdk) | Node.js / TypeScript | `npm install iii-sdk` | [README](./packages/node/iii/README.md)   |
+| [`iii-sdk`](https://pypi.org/project/iii-sdk/)     | Python               | `pip install iii-sdk` | [README](./packages/python/iii/README.md) |
+| [`iii-sdk`](https://crates.io/crates/iii-sdk)      | Rust                 | Add to `Cargo.toml`   | [README](./packages/rust/iii/README.md)   |
 
-## Quick Start
+## Hello World
 
 ### Node.js
 
 ```javascript
-import { init } from 'iii-sdk'
+import { init } from 'iii-sdk';
 
-const iii = init('ws://localhost:49134')
+const iii = init('ws://localhost:49134');
 
 iii.registerFunction({ id: 'greet' }, async (input) => {
-  return { message: `Hello, ${input.name}!` }
-})
+  return { message: `Hello, ${input.name}!` };
+});
 
-const result = await iii.trigger('greet', { name: 'world' })
+const result = await iii.trigger('greet', { name: 'world' });
 ```
 
 ### Python
@@ -75,18 +75,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## API Surface
+## API
 
-| Operation | Node.js | Python | Rust |
-|-----------|---------|--------|------|
-| Initialize | `init(url)` | `III(url)` | `III::new(url)` |
-| Connect | Auto on `init()` | `await iii.connect()` | `iii.connect().await?` |
-| Register function | `iii.registerFunction({ id }, handler)` | `iii.register_function(id, handler)` | `iii.register_function(id, \|input\| ...)` |
-| Register trigger | `iii.registerTrigger({ type, function_id, config })` | `iii.register_trigger(type, fn_id, config)` | `iii.register_trigger(type, fn_id, config)?` |
-| Invoke (sync) | `await iii.trigger(id, data)` | `await iii.trigger(id, data)` | `iii.trigger(id, data).await?` |
-| Invoke (fire-and-forget) | `iii.triggerVoid(id, data)` | `iii.trigger_void(id, data)` | `iii.trigger_void(id, data)?` |
+| Operation                | Node.js                                              | Python                                      | Rust                                         |
+| ------------------------ | ---------------------------------------------------- | ------------------------------------------- | -------------------------------------------- |
+| Initialize               | `init(url)`                                          | `III(url)`                                  | `III::new(url)`                              |
+| Connect                  | Auto on `init()`                                     | `await iii.connect()`                       | `iii.connect().await?`                       |
+| Register function        | `iii.registerFunction({ id }, handler)`              | `iii.register_function(id, handler)`        | `iii.register_function(id, \|input\| ...)`   |
+| Register trigger         | `iii.registerTrigger({ type, function_id, config })` | `iii.register_trigger(type, fn_id, config)` | `iii.register_trigger(type, fn_id, config)?` |
+| Invoke (await)           | `await iii.trigger(id, data)`                        | `await iii.trigger(id, data)`               | `iii.trigger(id, data).await?`               |
+| Invoke (fire-and-forget) | `iii.triggerVoid(id, data)`                          | `iii.trigger_void(id, data)`                | `iii.trigger_void(id, data)?`                |
 
-> `call()` and `callVoid()` / `call_void()` exist as deprecated aliases. Use `trigger()` and `triggerVoid()` / `trigger_void()`.
+> `call()` and `callVoid()` / `call_void()` are deprecated and will be removed in a future release. Use `trigger()` and `triggerVoid()` / `trigger_void()`.
 
 ## Development
 

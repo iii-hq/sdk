@@ -12,7 +12,7 @@ Python SDK for the [iii engine](https://github.com/iii-hq/iii).
 pip install iii-sdk
 ```
 
-## Quick Start
+## Hello World
 
 ```python
 import asyncio
@@ -42,15 +42,15 @@ asyncio.run(main())
 
 ## API
 
-| Method | Description |
-|--------|-------------|
-| `III(url)` | Create an SDK instance |
-| `await iii.connect()` | Connect to the engine (sets up WebSocket + OTel) |
-| `iii.register_function(id, handler)` | Register a function that can be invoked by name |
-| `iii.register_trigger(type, function_id, config)` | Bind a trigger (HTTP, cron, queue, etc.) to a function |
-| `iii.register_trigger_type(id, description, handler)` | Register a custom trigger type |
-| `await iii.trigger(id, data)` | Invoke a function and wait for the result |
-| `iii.trigger_void(id, data)` | Invoke a function without waiting (fire-and-forget) |
+| Method                                                | Description                                            |
+| ----------------------------------------------------- | ------------------------------------------------------ |
+| `III(url)`                                            | Create an SDK instance                                 |
+| `await iii.connect()`                                 | Connect to the engine                                  |
+| `iii.register_function(id, handler)`                  | Register a function that can be invoked by name        |
+| `iii.register_trigger(type, function_id, config)`     | Bind a trigger (HTTP, cron, queue, etc.) to a function |
+| `iii.register_trigger_type(id, description, handler)` | Register a custom trigger type                         |
+| `await iii.trigger(id, data)`                         | Invoke a function and wait for the result              |
+| `iii.trigger_void(id, data)`                          | Invoke a function without waiting (fire-and-forget)    |
 
 ### Connection
 

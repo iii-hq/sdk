@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 |--------|-------------|
 | `III::new(url)` | Create an SDK instance |
 | `iii.connect().await?` | Connect to the engine (sets up WebSocket + OTel) |
-| `iii.register_function(id, \|input\| ...)` | Register a callable function |
+| `iii.register_function(id, \|input\| ...)` | Register a function that can be invoked by name |
 | `iii.register_trigger(type, fn_id, config)?` | Bind a trigger to a function |
 | `iii.trigger(id, data).await?` | Invoke a function and wait for the result |
 | `iii.trigger_void(id, data)?` | Invoke a function without waiting (fire-and-forget) |

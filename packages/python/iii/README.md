@@ -46,7 +46,7 @@ asyncio.run(main())
 |--------|-------------|
 | `III(url)` | Create an SDK instance |
 | `await iii.connect()` | Connect to the engine (sets up WebSocket + OTel) |
-| `iii.register_function(id, handler)` | Register a callable function |
+| `iii.register_function(id, handler)` | Register a function that can be invoked by name |
 | `iii.register_trigger(type, function_id, config)` | Bind a trigger to a function |
 | `await iii.trigger(id, data)` | Invoke a function and wait for the result |
 | `iii.trigger_void(id, data)` | Invoke a function without waiting (fire-and-forget) |

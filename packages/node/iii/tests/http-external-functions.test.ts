@@ -142,7 +142,7 @@ describe('HTTP external functions', () => {
     let httpFn: { unregister(): void } | undefined
 
     try {
-      httpFn = iii.registerHttpFunction(functionId, {
+      httpFn = iii.registerFunction({ id: functionId }, {
         url: webhookProbe.url(),
         method: 'POST',
         timeout_ms: 3000,
@@ -183,7 +183,7 @@ describe('HTTP external functions', () => {
     let httpFn: { id: string; unregister(): void } | undefined
 
     try {
-      httpFn = iii.registerHttpFunction(functionId, {
+      httpFn = iii.registerFunction({ id: functionId }, {
         url: webhookProbe.url(),
         method: 'POST',
         timeout_ms: 3000,
@@ -220,7 +220,7 @@ describe('HTTP external functions', () => {
     let httpFn: { unregister(): void } | undefined
 
     try {
-      httpFn = iii.registerHttpFunction(functionId, {
+      httpFn = iii.registerFunction({ id: functionId }, {
         url: webhookProbe.url(),
         method: 'POST',
         timeout_ms: 3000,
@@ -277,13 +277,13 @@ describe('HTTP external functions', () => {
     let httpFnB: { unregister(): void } | undefined
 
     try {
-      httpFnA = iii.registerHttpFunction(functionIdA, {
+      httpFnA = iii.registerFunction({ id: functionIdA }, {
         url: webhookProbeA.url(),
         method: 'POST',
         timeout_ms: 3000,
       })
 
-      httpFnB = iii.registerHttpFunction(functionIdB, {
+      httpFnB = iii.registerFunction({ id: functionIdB }, {
         url: webhookProbeB.url(),
         method: 'POST',
         timeout_ms: 3000,
@@ -341,7 +341,7 @@ describe('HTTP external functions', () => {
     let httpFn: { unregister(): void } | undefined
 
     try {
-      httpFn = iii.registerHttpFunction(functionId, {
+      httpFn = iii.registerFunction({ id: functionId }, {
         url: webhookProbe.url(),
         method: 'POST',
         timeout_ms: 3000,
@@ -400,7 +400,7 @@ describe('HTTP external functions', () => {
     let httpFn: { unregister(): void } | undefined
 
     try {
-      httpFn = iii.registerHttpFunction(functionId, {
+      httpFn = iii.registerFunction({ id: functionId }, {
         url: webhookProbe.url(),
         method: 'PUT',
         timeout_ms: 3000,

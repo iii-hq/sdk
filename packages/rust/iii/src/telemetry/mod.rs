@@ -152,46 +152,55 @@ pub async fn init_otel(config: OtelConfig) {
     };
 
     // Set up logger provider if enabled
-    let (logger_provider, resolved_flush_ms, resolved_batch_size) = if config.logs_enabled.unwrap_or(true) {
-        let log_exporter = EngineLogExporter::new(connection.clone());
+    let (logger_provider, resolved_flush_ms, resolved_batch_size) =
+        if config.logs_enabled.unwrap_or(true) {
+            let log_exporter = EngineLogExporter::new(connection.clone());
 
-        // Resolve: config > custom env var > default (100ms flush, batch size 1).
-        // Deliberately overrides standard OTEL_BLRP_* env vars for cross-SDK consistency.
-        let flush_ms = config.logs_flush_interval_ms
-            .or_else(|| std::env::var("OTEL_LOGS_FLUSH_INTERVAL_MS").ok()
-                .and_then(|v| v.parse::<u64>().ok()))
-            .unwrap_or(100);
+            // Resolve: config > custom env var > default (100ms flush, batch size 1).
+            // Deliberately overrides standard OTEL_BLRP_* env vars for cross-SDK consistency.
+            let flush_ms = config
+                .logs_flush_interval_ms
+                .or_else(|| {
+                    std::env::var("OTEL_LOGS_FLUSH_INTERVAL_MS")
+                        .ok()
+                        .and_then(|v| v.parse::<u64>().ok())
+                })
+                .unwrap_or(100);
 
-        let batch_size = config.logs_batch_size
-            .or_else(|| std::env::var("OTEL_LOGS_BATCH_SIZE").ok()
-                .and_then(|v| v.parse::<usize>().ok())
-                .filter(|&v| v >= 1))
-            .unwrap_or(1);
+            let batch_size = config
+                .logs_batch_size
+                .or_else(|| {
+                    std::env::var("OTEL_LOGS_BATCH_SIZE")
+                        .ok()
+                        .and_then(|v| v.parse::<usize>().ok())
+                        .filter(|&v| v >= 1)
+                })
+                .unwrap_or(1);
 
-        let batch_config = BatchConfigBuilder::default()
-            .with_scheduled_delay(std::time::Duration::from_millis(flush_ms))
-            .with_max_export_batch_size(batch_size)
-            .build();
+            let batch_config = BatchConfigBuilder::default()
+                .with_scheduled_delay(std::time::Duration::from_millis(flush_ms))
+                .with_max_export_batch_size(batch_size)
+                .build();
 
-        let log_processor = BatchLogProcessor::builder(log_exporter)
-            .with_batch_config(batch_config)
-            .build();
+            let log_processor = BatchLogProcessor::builder(log_exporter)
+                .with_batch_config(batch_config)
+                .build();
 
-        tracing::debug!(
-            flush_interval_ms = flush_ms,
-            batch_size = batch_size,
-            "Log provider configured"
-        );
+            tracing::debug!(
+                flush_interval_ms = flush_ms,
+                batch_size = batch_size,
+                "Log provider configured"
+            );
 
-        let provider = SdkLoggerProvider::builder()
-            .with_resource(resource)
-            .with_log_processor(log_processor)
-            .build();
+            let provider = SdkLoggerProvider::builder()
+                .with_resource(resource)
+                .with_log_processor(log_processor)
+                .build();
 
-        (Some(provider), flush_ms, batch_size)
-    } else {
-        (None, 0, 0)
-    };
+            (Some(provider), flush_ms, batch_size)
+        } else {
+            (None, 0, 0)
+        };
 
     let shutdown_timeout =
         std::time::Duration::from_millis(config.shutdown_timeout_ms.unwrap_or(10_000));
@@ -358,6 +367,21 @@ pub fn is_initialized() -> bool {
     OTEL_INITIALIZED.load(Ordering::Acquire)
 }
 
+/// Get a clone of the logger provider, if OTel has been initialized and logs are enabled.
+///
+/// Returns `None` if OTel is not initialized or logs are disabled.
+/// This is used by the SDK logger to emit OTel LogRecords alongside the
+/// engine invoker calls.
+pub fn get_logger_provider() -> Option<SdkLoggerProvider> {
+    if !is_initialized() {
+        return None;
+    }
+    // Try to acquire the lock without blocking. If contended, skip emission.
+    let lock = get_otel_lock();
+    let state = lock.try_lock().ok()?;
+    state.as_ref()?.logger_provider.clone()
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -384,19 +408,4 @@ mod tests {
         let val: Option<usize> = "1".parse::<usize>().ok().filter(|&v| v >= 1);
         assert_eq!(val, Some(1));
     }
-}
-
-/// Get a clone of the logger provider, if OTel has been initialized and logs are enabled.
-///
-/// Returns `None` if OTel is not initialized or logs are disabled.
-/// This is used by the SDK logger to emit OTel LogRecords alongside the
-/// engine invoker calls.
-pub fn get_logger_provider() -> Option<SdkLoggerProvider> {
-    if !is_initialized() {
-        return None;
-    }
-    // Try to acquire the lock without blocking. If contended, skip emission.
-    let lock = get_otel_lock();
-    let state = lock.try_lock().ok()?;
-    state.as_ref()?.logger_provider.clone()
 }

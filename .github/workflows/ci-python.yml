@@ -69,7 +69,7 @@ jobs:
           tail -n 50 /tmp/iii-engine.log || true
           exit 1
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: uv run pytest -q
 
       - name: Stop III Engine

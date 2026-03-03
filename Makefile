@@ -68,7 +68,8 @@ engine-start:
 	@test -n "$(III_CONFIG)" || { echo "error: III_CONFIG is required (e.g. make engine-start III_CONFIG=path/to/config.yml III_HEALTH_PORT=49134)"; exit 1; }
 	@test -n "$(III_HEALTH_PORT)" || { echo "error: III_HEALTH_PORT is required (e.g. make engine-start III_CONFIG=path/to/config.yml III_HEALTH_PORT=49134)"; exit 1; }
 	@$(MAKE) engine-stop 2>/dev/null || true
-	@pid=$$(lsof -ti :$(III_HEALTH_PORT) 2>/dev/null); [ -z "$$pid" ] || { kill -9 $$pid 2>/dev/null || true; sleep 2; }
+	@pid=$$(lsof -ti :$(III_HEALTH_PORT) 2>/dev/null || ss -tlnp 2>/dev/null | grep ':$(III_HEALTH_PORT) ' | sed -n 's/.*pid=\([0-9]*\).*/\1/p' || fuser $(III_HEALTH_PORT)/tcp 2>/dev/null); \
+		[ -z "$$pid" ] || { kill -9 $$pid 2>/dev/null || true; sleep 2; }
 	@rm -rf "$(III_ENGINE_DATA)"
 	@mkdir -p "$(III_ENGINE_DATA)"
 	@cp "$(CURDIR)/$(III_CONFIG)" "$(III_ENGINE_DATA)/config.yml"

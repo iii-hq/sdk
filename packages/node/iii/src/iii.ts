@@ -814,13 +814,15 @@ class Sdk implements ISdk {
       const errorMessage = fn
         ? 'Function is HTTP-invoked and cannot be invoked locally'
         : 'Function not found'
-      this.sendMessage(MessageType.InvocationResult, {
-        invocation_id,
-        function_id,
-        error: { code: errorCode, message: errorMessage },
-        traceparent,
-        baggage,
-      })
+      if (invocation_id) {
+        this.sendMessage(MessageType.InvocationResult, {
+          invocation_id,
+          function_id,
+          error: { code: errorCode, message: errorMessage },
+          traceparent,
+          baggage,
+        })
+      }
     }
   }
 

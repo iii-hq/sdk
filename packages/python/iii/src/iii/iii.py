@@ -408,7 +408,10 @@ class III:
 
         if not func or not func.handler:
             error_code = "function_not_invokable" if func else "function_not_found"
-            error_msg = "Function is HTTP-invoked and cannot be invoked locally" if func else f"Function '{path}' not found"
+            if func:
+                error_msg = "Function is HTTP-invoked and cannot be invoked locally"
+            else:
+                error_msg = f"Function '{path}' not found"
             log.warning(error_msg)
             if invocation_id:
                 await self._send(
@@ -572,6 +575,11 @@ class III:
         is_handler = isinstance(handler_or_invocation, HttpInvocationConfig) is False
 
         if is_handler:
+            if not callable(handler_or_invocation):
+                actual_type = type(handler_or_invocation).__name__
+                raise TypeError(
+                    f"handler_or_invocation must be callable or HttpInvocationConfig, got {actual_type}"
+                )
             handler = handler_or_invocation
             msg = RegisterFunctionMessage(id=path, description=description, metadata=metadata)
             self._send_if_connected(msg)

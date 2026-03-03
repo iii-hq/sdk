@@ -117,7 +117,12 @@ impl WebhookProbe {
         let response = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 10\r\n\r\n{\"ok\":true}";
         let _ = stream.write_all(response).await;
 
-        CapturedWebhook { method, url, headers, body }
+        CapturedWebhook {
+            method,
+            url,
+            headers,
+            body,
+        }
     }
 
     async fn wait_for_webhook(&self, timeout: Duration) -> Option<CapturedWebhook> {
@@ -253,8 +258,14 @@ async fn delivers_events_with_custom_headers() {
         .expect("no webhook received");
 
     assert_eq!(webhook.method, "POST");
-    assert_eq!(webhook.headers.get("x-custom-header").map(String::as_str), Some("test-value"));
-    assert_eq!(webhook.headers.get("x-another").map(String::as_str), Some("123"));
+    assert_eq!(
+        webhook.headers.get("x-custom-header").map(String::as_str),
+        Some("test-value")
+    );
+    assert_eq!(
+        webhook.headers.get("x-another").map(String::as_str),
+        Some("123")
+    );
 
     drop(_trigger);
     http_fn.unregister();
@@ -369,7 +380,10 @@ async fn stops_delivering_events_after_unregister() {
         .wait_for_webhook(Duration::from_secs(7))
         .await
         .expect("no webhook before unregister");
-    assert_eq!(webhook_before.body.as_ref().unwrap()["phase"], "before-unregister");
+    assert_eq!(
+        webhook_before.body.as_ref().unwrap()["phase"],
+        "before-unregister"
+    );
 
     drop(trigger);
     http_fn.unregister();
@@ -383,7 +397,10 @@ async fn stops_delivering_events_after_unregister() {
         .wait_for_webhook(Duration::from_secs(2))
         .await
         .is_some();
-    assert!(!received_after, "should not receive webhook after unregister");
+    assert!(
+        !received_after,
+        "should not receive webhook after unregister"
+    );
 
     iii.shutdown_async().await;
 }

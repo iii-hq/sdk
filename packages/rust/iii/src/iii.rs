@@ -395,17 +395,23 @@ impl III {
         handler: Option<RemoteFunctionHandler>,
     ) -> FunctionRef {
         let id = message.id.clone();
-        if self.inner.functions.lock_or_recover().contains_key(&id) {
-            panic!("function id '{}' already registered", id);
+        if id.trim().is_empty() {
+            panic!("id is required");
         }
         let data = RemoteFunctionData {
             message: message.clone(),
             handler,
         };
-        self.inner
-            .functions
-            .lock_or_recover()
-            .insert(id.clone(), data);
+        let mut funcs = self.inner.functions.lock_or_recover();
+        match funcs.entry(id.clone()) {
+            std::collections::hash_map::Entry::Occupied(_) => {
+                panic!("function id '{}' already registered", id);
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(data);
+            }
+        }
+        drop(funcs);
         let _ = self.send_message(message.to_message());
 
         let iii = self.clone();
@@ -417,10 +423,7 @@ impl III {
             });
         });
 
-        FunctionRef {
-            id,
-            unregister_fn,
-        }
+        FunctionRef { id, unregister_fn }
     }
 
     pub fn register_function<H: IntoFunctionHandler>(
@@ -429,9 +432,6 @@ impl III {
         handler: H,
     ) -> FunctionRef {
         let id = id.into();
-        if id.trim().is_empty() {
-            panic!("id is required");
-        }
         let mut message = RegisterFunctionMessage {
             id: id.clone(),
             description: None,
@@ -1063,7 +1063,12 @@ impl III {
     ) {
         tracing::debug!(function_id = %function_id, traceparent = ?traceparent, baggage = ?baggage, "Invoking function");
 
-        let func_data = self.inner.functions.lock_or_recover().get(&function_id).cloned();
+        let func_data = self
+            .inner
+            .functions
+            .lock_or_recover()
+            .get(&function_id)
+            .cloned();
         let handler = func_data.as_ref().and_then(|d| d.handler.clone());
 
         let Some(handler) = handler else {

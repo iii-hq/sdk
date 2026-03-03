@@ -573,7 +573,9 @@ class III:
             raise ValueError(f"function id '{path}' already registered")
 
         if isinstance(handler_or_invocation, HttpInvocationConfig):
-            msg = RegisterFunctionMessage(id=path, invocation=handler_or_invocation, description=description, metadata=metadata)
+            msg = RegisterFunctionMessage(
+                id=path, invocation=handler_or_invocation, description=description, metadata=metadata
+            )
             self._send_if_connected(msg)
             self._functions[path] = RemoteFunctionData(message=msg)
         else:

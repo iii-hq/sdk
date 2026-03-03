@@ -572,9 +572,11 @@ class III:
         if path in self._functions:
             raise ValueError(f"function id '{path}' already registered")
 
-        is_handler = isinstance(handler_or_invocation, HttpInvocationConfig) is False
-
-        if is_handler:
+        if isinstance(handler_or_invocation, HttpInvocationConfig):
+            msg = RegisterFunctionMessage(id=path, invocation=handler_or_invocation, description=description, metadata=metadata)
+            self._send_if_connected(msg)
+            self._functions[path] = RemoteFunctionData(message=msg)
+        else:
             if not callable(handler_or_invocation):
                 actual_type = type(handler_or_invocation).__name__
                 raise TypeError(
@@ -590,9 +592,6 @@ class III:
                 return await with_context(lambda _: handler(input_data), ctx)
 
             self._functions[path] = RemoteFunctionData(message=msg, handler=wrapped)
-        else:
-            config = handler_or_invocation
-            msg = RegisterFunctionMessage(id=path, invocation=config, description=description, metadata=metadata)
             self._send_if_connected(msg)
             self._functions[path] = RemoteFunctionData(message=msg)
 

@@ -594,8 +594,6 @@ class III:
                 return await with_context(lambda _: handler(input_data), ctx)
 
             self._functions[path] = RemoteFunctionData(message=msg, handler=wrapped)
-            self._send_if_connected(msg)
-            self._functions[path] = RemoteFunctionData(message=msg)
 
         def unregister() -> None:
             self._functions.pop(path, None)

@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     iii.register_trigger("http", "greet", json!({
-        "api_path": "greet",
+        "api_path": "/greet",
         "http_method": "POST"
     }))?;
 
@@ -49,15 +49,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## API
 
-| Method                                                | Description                                            |
-| ----------------------------------------------------- | ------------------------------------------------------ |
-| `III::new(url)`                                       | Create an SDK instance                                 |
-| `iii.connect().await?`                                | Connect to the engine                                  |
-| `iii.register_function(id, \|input\| ...)`            | Register a function that can be invoked by name        |
-| `iii.register_trigger(type, fn_id, config)?`          | Bind a trigger (HTTP, cron, queue, etc.) to a function |
-| `iii.register_trigger_type(id, description, handler)` | Register a custom trigger type                         |
-| `iii.trigger(id, data).await?`                        | Invoke a function and wait for the result              |
-| `iii.trigger_void(id, data)?`                         | Invoke a function without waiting (fire-and-forget)    |
+| Operation                | Signature                                    | Description                                            |
+| ------------------------ | -------------------------------------------- | ------------------------------------------------------ |
+| Initialize               | `III::new(url)`                              | Create an SDK instance                                 |
+| Connect                  | `iii.connect().await?`                       | Connect to the engine                                  |
+| Register function        | `iii.register_function(id, \|input\| ...)`   | Register a function that can be invoked by name        |
+| Register trigger         | `iii.register_trigger(type, fn_id, config)?` | Bind a trigger (HTTP, cron, queue, etc.) to a function |
+| Invoke (await)           | `iii.trigger(id, data).await?`               | Invoke a function and wait for the result              |
+| Invoke (fire-and-forget) | `iii.trigger_void(id, data)?`                | Invoke a function without waiting (fire-and-forget)    |
 
 ### Connection
 
@@ -66,10 +65,9 @@ Rust requires an explicit `iii.connect().await?` call. This starts a background 
 ### Registering Functions
 
 ```rust
-iii.register_function("math.add", |input| async move {
-    let a = input["a"].as_i64().unwrap_or(0);
-    let b = input["b"].as_i64().unwrap_or(0);
-    Ok(json!({ "sum": a + b }))
+iii.register_function("orders.create", |input| async move {
+    let item = input["body"]["item"].as_str().unwrap_or("");
+    Ok(json!({ "status_code": 201, "body": { "id": "123", "item": item } }))
 });
 ```
 
@@ -78,17 +76,10 @@ iii.register_function("math.add", |input| async move {
 Requires `iii.connect().await?` first.
 
 ```rust
-iii.register_trigger("http", "math.add", json!({
-    "api_path": "add",
+iii.register_trigger("http", "orders.create", json!({
+    "api_path": "/orders",
     "http_method": "POST"
 }))?;
-```
-
-### Custom Trigger Types
-
-```rust
-// handler must implement TriggerHandler (register_trigger + unregister_trigger)
-iii.register_trigger_type("webhook", "External webhook trigger", my_handler);
 ```
 
 ### Invoking Functions
@@ -96,7 +87,7 @@ iii.register_trigger_type("webhook", "External webhook trigger", my_handler);
 Requires `iii.connect().await?` first.
 
 ```rust
-let result = iii.trigger("math.add", json!({ "a": 2, "b": 3 })).await?;
+let result = iii.trigger("orders.create", json!({ "body": { "item": "widget" } })).await?;
 
 iii.trigger_void("analytics.track", json!({ "event": "page_view" }))?;
 ```
@@ -118,6 +109,14 @@ Enable the `otel` feature for full tracing and metrics support:
 [dependencies]
 iii-sdk = { version = "0.3", features = ["otel"] }
 ```
+
+## Modules
+
+| Import               | What it provides                                    |
+| -------------------- | --------------------------------------------------- |
+| `iii_sdk`            | Core SDK (`III`, types)                             |
+| `iii_sdk::stream`    | Stream client (`Streams`, `UpdateBuilder`)          |
+| `iii_sdk::telemetry` | OpenTelemetry integration (requires `otel` feature) |
 
 ## Deprecated
 

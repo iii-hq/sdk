@@ -25,7 +25,7 @@ iii.registerFunction({ id: 'greet' }, async (input) => {
 iii.registerTrigger({
   type: 'http',
   function_id: 'greet',
-  config: { api_path: 'greet', http_method: 'POST' },
+  config: { api_path: '/greet', http_method: 'POST' },
 })
 
 const result = await iii.trigger('greet', { name: 'world' })
@@ -33,14 +33,13 @@ const result = await iii.trigger('greet', { name: 'world' })
 
 ## API
 
-| Method                                                   | Description                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------------ |
-| `init(url, options?)`                                    | Create and connect to the engine. Returns an `ISdk` instance |
-| `iii.registerFunction({ id }, handler)`                  | Register a function that can be invoked by name              |
-| `iii.registerTrigger({ type, function_id, config })`     | Bind a trigger (HTTP, cron, queue, etc.) to a function       |
-| `iii.registerTriggerType({ id, description }, handlers)` | Register a custom trigger type                               |
-| `await iii.trigger(id, data, timeoutMs?)`                | Invoke a function and wait for the result                    |
-| `iii.triggerVoid(id, data)`                              | Invoke a function without waiting (fire-and-forget)          |
+| Operation                | Signature                                            | Description                                                  |
+| ------------------------ | ---------------------------------------------------- | ------------------------------------------------------------ |
+| Initialize               | `init(url, options?)`                                | Create and connect to the engine. Returns an `ISdk` instance |
+| Register function        | `iii.registerFunction({ id }, handler)`              | Register a function that can be invoked by name              |
+| Register trigger         | `iii.registerTrigger({ type, function_id, config })` | Bind a trigger (HTTP, cron, queue, etc.) to a function       |
+| Invoke (await)           | `await iii.trigger(id, data, timeoutMs?)`            | Invoke a function and wait for the result                    |
+| Invoke (fire-and-forget) | `iii.triggerVoid(id, data)`                          | Invoke a function without waiting (fire-and-forget)          |
 
 ### Registering Functions
 
@@ -56,24 +55,8 @@ iii.registerFunction({ id: 'orders.create' }, async (input) => {
 iii.registerTrigger({
   type: 'http',
   function_id: 'orders.create',
-  config: { api_path: 'orders', http_method: 'POST' },
+  config: { api_path: '/orders', http_method: 'POST' },
 })
-```
-
-### Custom Trigger Types
-
-```javascript
-iii.registerTriggerType(
-  { id: 'webhook', description: 'External webhook trigger' },
-  {
-    registerTrigger: async (config) => {
-      /* setup */
-    },
-    unregisterTrigger: async (config) => {
-      /* teardown */
-    },
-  },
-)
 ```
 
 ### Invoking Functions

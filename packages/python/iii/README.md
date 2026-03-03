@@ -31,7 +31,7 @@ async def main():
     iii.register_trigger(
         type="http",
         function_id="greet",
-        config={"api_path": "greet", "http_method": "POST"}
+        config={"api_path": "/greet", "http_method": "POST"}
     )
 
     result = await iii.trigger("greet", {"name": "world"})
@@ -42,15 +42,14 @@ asyncio.run(main())
 
 ## API
 
-| Method                                                | Description                                            |
-| ----------------------------------------------------- | ------------------------------------------------------ |
-| `III(url)`                                            | Create an SDK instance                                 |
-| `await iii.connect()`                                 | Connect to the engine                                  |
-| `iii.register_function(id, handler)`                  | Register a function that can be invoked by name        |
-| `iii.register_trigger(type, function_id, config)`     | Bind a trigger (HTTP, cron, queue, etc.) to a function |
-| `iii.register_trigger_type(id, description, handler)` | Register a custom trigger type                         |
-| `await iii.trigger(id, data)`                         | Invoke a function and wait for the result              |
-| `iii.trigger_void(id, data)`                          | Invoke a function without waiting (fire-and-forget)    |
+| Operation                | Signature                                         | Description                                            |
+| ------------------------ | ------------------------------------------------- | ------------------------------------------------------ |
+| Initialize               | `III(url)`                                        | Create an SDK instance                                 |
+| Connect                  | `await iii.connect()`                             | Connect to the engine                                  |
+| Register function        | `iii.register_function(id, handler)`              | Register a function that can be invoked by name        |
+| Register trigger         | `iii.register_trigger(type, function_id, config)` | Bind a trigger (HTTP, cron, queue, etc.) to a function |
+| Invoke (await)           | `await iii.trigger(id, data)`                     | Invoke a function and wait for the result              |
+| Invoke (fire-and-forget) | `iii.trigger_void(id, data)`                      | Invoke a function without waiting (fire-and-forget)    |
 
 ### Connection
 
@@ -59,10 +58,10 @@ Python requires an explicit `await iii.connect()` call (no async constructors in
 ### Registering Functions
 
 ```python
-async def create_todo(data):
-    return {"status_code": 201, "body": {"id": "123", "title": data["body"]["title"]}}
+async def create_order(data):
+    return {"status_code": 201, "body": {"id": "123", "item": data["body"]["item"]}}
 
-iii.register_function("api.post.todo", create_todo)
+iii.register_function("orders.create", create_order)
 ```
 
 ### Registering Triggers
@@ -72,24 +71,9 @@ Requires `await iii.connect()` first.
 ```python
 iii.register_trigger(
     type="http",
-    function_id="api.post.todo",
-    config={"api_path": "todo", "http_method": "POST"}
+    function_id="orders.create",
+    config={"api_path": "/orders", "http_method": "POST"}
 )
-```
-
-### Custom Trigger Types
-
-```python
-async def on_register(config):
-    pass  # setup
-
-async def on_unregister(config):
-    pass  # teardown
-
-iii.register_trigger_type("webhook", "External webhook trigger", {
-    "register_trigger": on_register,
-    "unregister_trigger": on_unregister,
-})
 ```
 
 ### Invoking Functions
@@ -97,9 +81,37 @@ iii.register_trigger_type("webhook", "External webhook trigger", {
 Requires `await iii.connect()` first.
 
 ```python
-result = await iii.trigger("api.post.todo", {"body": {"title": "Buy milk"}})
+result = await iii.trigger("orders.create", {"body": {"item": "widget"}})
 
 iii.trigger_void("analytics.track", {"event": "page_view"})
+```
+
+## Modules
+
+| Import          | What it provides                  |
+| --------------- | --------------------------------- |
+| `iii`           | Core SDK (`III`, types)           |
+| `iii.stream`    | Stream client for real-time state |
+| `iii.telemetry` | OpenTelemetry integration         |
+
+## Development
+
+### Install in development mode
+
+```bash
+pip install -e .
+```
+
+### Type checking
+
+```bash
+mypy src
+```
+
+### Linting
+
+```bash
+ruff check src
 ```
 
 ## Deprecated
